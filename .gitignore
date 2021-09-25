@@ -3,6 +3,9 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+# input
+input/
+
 # C extensions
 *.so
 
@@ -105,6 +108,7 @@ celerybeat.pid
 .env
 .venv
 env/
+venv_deep_vit_macula/
 venv/
 ENV/
 env.bak/
