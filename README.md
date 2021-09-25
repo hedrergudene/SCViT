@@ -1,2 +1,2 @@
-# U_Autoencoders
-Repository containing implementations of U-Net like architectures
+# Deep-ViT macula
+Official repository of the paper "...".
