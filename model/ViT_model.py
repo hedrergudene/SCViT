@@ -1,5 +1,5 @@
 import torch
-from model.functions import Patch, Unflatten, Unpatch, DownSampling, UpSampling
+from model.functions import *
 
 # Class PatchEncoder, to include initial and positional encoding
 class OriginalPatchEncoder(torch.nn.Module):
