@@ -268,7 +268,7 @@ class SkipConnection(torch.nn.Module):
 
 
 # Model architecture
-class ViT_UNet(torch.nn.Module):
+class ViT_model(torch.nn.Module):
     def __init__(self,
                  depth:int,
                  depth_te:int,
