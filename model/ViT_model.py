@@ -1,5 +1,6 @@
 import numpy as np
 import torch
+<<<<<<< HEAD
 from typing import List
 import itertools
 
@@ -55,6 +56,9 @@ def upsampling(encoded_patches, num_channels):
     new_patches_flattened = torch.nn.Flatten(start_dim = -3, end_dim = -1).forward(new_patches)
     return new_patches_flattened
 
+=======
+from model.functions import *
+>>>>>>> f00fd9f953ccc470db234aa9c7aacfa669ffeecd
 
 # Class PatchEncoder, to include initial and positional encoding
 class PatchEncoder(torch.nn.Module):
