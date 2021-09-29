@@ -1,6 +1,5 @@
 import numpy as np
 import torch
-<<<<<<< HEAD
 from typing import List
 import itertools
 
@@ -56,9 +55,6 @@ def upsampling(encoded_patches, num_channels):
     new_patches_flattened = torch.nn.Flatten(start_dim = -3, end_dim = -1).forward(new_patches)
     return new_patches_flattened
 
-=======
-from model.functions import *
->>>>>>> f00fd9f953ccc470db234aa9c7aacfa669ffeecd
 
 # Class PatchEncoder, to include initial and positional encoding
 class PatchEncoder(torch.nn.Module):
@@ -337,35 +333,25 @@ class ViT_UNet(torch.nn.Module):
         # Output
         self.Tube = torch.nn.ModuleList()
         if self.preprocessing == 'conv':
-            self.Tube.append(torch.nn.Conv2d(self.num_channels,self.num_channels,3,padding = 'same'))
-        self.linear_list = [self.num_channels*self.num_patches*self.patch_size**2] + linear_list
+            self.Tube.append(torch.nn.Conv2d(self.num_channels,1,3,padding = 'same'))
+        self.Tube.append(torch.nn.Flatten())
+        self.linear_list = [self.num_patches*self.patch_size**2] + linear_list
         for i in range(len(linear_list)-1):
-            self.Tube.append(torch.nn.Linear(in_features=self.linear_list[i], out_features=self.linear_list[i+i]))
+            self.Tube.append(torch.nn.Linear(in_features=self.linear_list[i], out_features=self.linear_list[i+i], dtype = self.dtype))
 
     def forward(self,
                 X:torch.Tensor,
                 ):
         # Previous validations
         batch_size, ch, h, w = X.size()
-
         # "Preprocessing"
         X_patch = self.PE(X)
-
         # Encoders
-        encoder_skip = []
         for i, enc in enumerate(self.Encoders):
             X_patch = enc(X_patch)
             if (i+1)%self.depth_te==0:
-                encoder_skip.append(X_patch)
                 X_patch = downsampling(X_patch, self.num_channels)
-
-        
         # Output
-        X_restored = unpatch(unflatten(X_patch, self.num_channels), self.num_channels).reshape(batch_size, ch, h, w)
-        #print('Final processing is: ' + self.preprocessing)
-        if self.preprocessing == 'conv':
-            X_restored = self.conv2d(X_restored)
-        elif self.preprocessing == 'fourier':
-            X_restored = torch.fft.ifft2(X, norm='ortho').real
-
-        return X_restored
+        for i, tube in enumerate(self.Tube):
+            X_patch = tube(X_patch)
+        return X_patch
