@@ -65,6 +65,7 @@ class PatchEncoder(torch.nn.Module):
                  num_channels:int,
                  preprocessing:str,
                  dtype:torch.dtype,
+                 device:str='cuda',
                  ):
         super(PatchEncoder, self).__init__()
         # Parameters
@@ -77,6 +78,7 @@ class PatchEncoder(torch.nn.Module):
         assert preprocessing in ['conv', 'fourier', 'none'], f"Preprocessing can only be 'conv', 'fourier' or 'none'."
         self.preprocessing = preprocessing
         self.dtype = dtype
+        self.device = device
         self.positions = torch.arange(start = 0,
                          end = self.num_patches_final,
                          step = 1,
@@ -84,9 +86,10 @@ class PatchEncoder(torch.nn.Module):
 
         # Layers
         if self.preprocessing == "conv":
-            self.conv2d = torch.nn.Conv2d(self.num_channels, self.num_channels, 3, padding = 'same')
+            self.conv2d = torch.nn.Conv2d(self.num_channels, self.num_channels, 3, padding = 'same', device = self.device)
         self.position_embedding = torch.nn.Embedding(num_embeddings=self.num_patches_final,
                                                      embedding_dim = self.num_channels*self.patch_size_final**2,
+                                                     device = self.device,
                                                      )
 
     def forward(self, X):
@@ -110,13 +113,15 @@ class FeedForward(torch.nn.Module):
                  hidden_dim:int,
                  dropout:float,
                  dtype:torch.dtype,
+                 device:str = 'cuda',
                  ):
         super().__init__()
+        self.device = device
         self.net = torch.nn.Sequential(
-            torch.nn.Linear(projection_dim, hidden_dim, dtype = dtype),
+            torch.nn.Linear(projection_dim, hidden_dim, dtype = dtype, device = self.device),
             torch.nn.GELU(),
             torch.nn.Dropout(dropout),
-            torch.nn.Linear(hidden_dim, projection_dim, dtype = dtype),
+            torch.nn.Linear(hidden_dim, projection_dim, dtype = dtype, device = self.device),
             torch.nn.Dropout(dropout),
         )
     def forward(self, x):
@@ -135,6 +140,7 @@ class ReAttention(torch.nn.Module):
                  expansion_ratio = 3,
                  apply_transform=True,
                  transform_scale=False,
+                 device:str='cuda',
                  ):
         super().__init__()
         self.num_heads = num_heads
@@ -142,20 +148,21 @@ class ReAttention(torch.nn.Module):
         head_dim = dim // num_heads
         self.apply_transform = apply_transform
         self.scale = qk_scale or head_dim ** -0.5
+        self.device = device
         if apply_transform:
-            self.reatten_matrix = torch.nn.Conv2d(self.num_heads,self.num_heads, 1, 1)
-            self.var_norm = torch.nn.BatchNorm2d(self.num_heads)
-            self.qconv2d = torch.nn.Conv2d(self.num_channels,self.num_channels,3,padding = 'same', bias=qkv_bias)
-            self.kconv2d = torch.nn.Conv2d(self.num_channels,self.num_channels,3,padding = 'same', bias=qkv_bias)
-            self.vconv2d = torch.nn.Conv2d(self.num_channels,self.num_channels,3,padding = 'same', bias=qkv_bias)
+            self.reatten_matrix = torch.nn.Conv2d(self.num_heads,self.num_heads, 1, 1, device = self.device)
+            self.var_norm = torch.nn.BatchNorm2d(self.num_heads, device = self.device)
+            self.qconv2d = torch.nn.Conv2d(self.num_channels,self.num_channels,3,padding = 'same', bias=qkv_bias, device = self.device)
+            self.kconv2d = torch.nn.Conv2d(self.num_channels,self.num_channels,3,padding = 'same', bias=qkv_bias, device = self.device)
+            self.vconv2d = torch.nn.Conv2d(self.num_channels,self.num_channels,3,padding = 'same', bias=qkv_bias, device = self.device)
             self.reatten_scale = self.scale if transform_scale else 1.0
         else:
-            self.qconv2d = torch.nn.Conv2d(self.num_channels,self.num_channels,3,padding = 'same', bias=qkv_bias)
-            self.kconv2d = torch.nn.Conv2d(self.num_channels,self.num_channels,3,padding = 'same', bias=qkv_bias)
-            self.vconv2d = torch.nn.Conv2d(self.num_channels,self.num_channels,3,padding = 'same', bias=qkv_bias)
+            self.qconv2d = torch.nn.Conv2d(self.num_channels,self.num_channels,3,padding = 'same', bias=qkv_bias, device = self.device)
+            self.kconv2d = torch.nn.Conv2d(self.num_channels,self.num_channels,3,padding = 'same', bias=qkv_bias, device = self.device)
+            self.vconv2d = torch.nn.Conv2d(self.num_channels,self.num_channels,3,padding = 'same', bias=qkv_bias, device = self.device)
         
         self.attn_drop = torch.nn.Dropout(attn_drop)
-        self.proj = torch.nn.Linear(dim, dim)
+        self.proj = torch.nn.Linear(dim, dim, device = self.device)
         self.proj_drop = torch.nn.Dropout(proj_drop)
     def forward(self, x, atten=None):
         B, N, C = x.shape
@@ -185,6 +192,7 @@ class ReAttentionTransformerEncoder(torch.nn.Module):
                  proj_drop:int,
                  linear_drop:float,
                  dtype:torch.dtype,
+                 device:str='cuda',
                  ):
         super().__init__()
         self.num_patches = num_patches
@@ -196,6 +204,7 @@ class ReAttentionTransformerEncoder(torch.nn.Module):
         self.proj_drop = proj_drop
         self.linear_drop = linear_drop
         self.dtype = dtype
+        self.device = device
         self.ReAttn = ReAttention(self.projection_dim,
                                   num_channels = self.num_channels,
                                   num_heads = self.num_heads,
@@ -204,6 +213,7 @@ class ReAttentionTransformerEncoder(torch.nn.Module):
                                   )
         self.LN = torch.nn.LayerNorm(normalized_shape = (self.num_patches, self.projection_dim),
                                      dtype = self.dtype,
+                                     device = self.device,
                                      )
         self.FeedForward = FeedForward(projection_dim = self.projection_dim,
                                        hidden_dim = self.hidden_dim,
@@ -229,23 +239,25 @@ class SkipConnection(torch.nn.Module):
                  attn_drop=0.,
                  proj_drop=0.,
                  transform_scale=False,
+                 device:str='cuda',
                  ):
         super().__init__()
         self.num_heads = num_heads
         self.num_channels = num_channels
         head_dim = dim // num_heads
+        self.device = device
         
         # NOTE scale factor was wrong in my original version, can set manually to be compat with prev weights
         self.scale = head_dim ** -0.5
-        self.reatten_matrix = torch.nn.Conv2d(self.num_heads,self.num_heads, 1, 1)
-        self.var_norm = torch.nn.BatchNorm2d(self.num_heads)
-        self.qconv2d = torch.nn.Conv2d(self.num_channels,self.num_channels,3,padding = 'same', bias=qkv_bias)
-        self.kconv2d = torch.nn.Conv2d(self.num_channels,self.num_channels,3,padding = 'same', bias=qkv_bias)
-        self.vconv2d = torch.nn.Conv2d(self.num_channels,self.num_channels,3,padding = 'same', bias=qkv_bias)
+        self.reatten_matrix = torch.nn.Conv2d(self.num_heads,self.num_heads, 1, 1, device = self.device)
+        self.var_norm = torch.nn.BatchNorm2d(self.num_heads, device = self.device)
+        self.qconv2d = torch.nn.Conv2d(self.num_channels,self.num_channels,3,padding = 'same', bias=qkv_bias, device = self.device)
+        self.kconv2d = torch.nn.Conv2d(self.num_channels,self.num_channels,3,padding = 'same', bias=qkv_bias, device = self.device)
+        self.vconv2d = torch.nn.Conv2d(self.num_channels,self.num_channels,3,padding = 'same', bias=qkv_bias, device = self.device)
 
         self.reatten_scale = self.scale if transform_scale else 1.0
         self.attn_drop = torch.nn.Dropout(attn_drop)
-        self.proj = torch.nn.Linear(dim, dim)
+        self.proj = torch.nn.Linear(dim, dim, device = self.device)
         self.proj_drop = torch.nn.Dropout(proj_drop)
         
 
@@ -283,6 +295,7 @@ class ViT_model(torch.nn.Module):
                  proj_drop:int,
                  linear_drop:float,
                  dtype:torch.dtype,
+                 device:str='cuda',
                  ):
         super().__init__()
         # Testing
@@ -310,6 +323,7 @@ class ViT_model(torch.nn.Module):
         self.proj_drop = proj_drop
         self.linear_drop = linear_drop
         self.dtype = dtype
+        self.device = device
         # Layers
         self.PE = PatchEncoder(self.depth,self.num_patches,self.patch_size,self.num_channels,self.preprocessing,self.dtype)
         self.Encoders = torch.nn.ModuleList()
@@ -333,11 +347,11 @@ class ViT_model(torch.nn.Module):
         # Output
         self.Tube = torch.nn.ModuleList()
         if self.preprocessing == 'conv':
-            self.Tube.append(torch.nn.Conv2d(self.num_channels,1,3,padding = 'same'))
+            self.Tube.append(torch.nn.Conv2d(self.num_channels,1,3,padding = 'same', device = self.device))
         self.Tube.append(torch.nn.Flatten())
         self.linear_list = [self.num_patches*self.patch_size**2] + linear_list
         for i in range(len(linear_list)-1):
-            self.Tube.append(torch.nn.Linear(in_features=self.linear_list[i], out_features=self.linear_list[i+i], dtype = self.dtype))
+            self.Tube.append(torch.nn.Linear(in_features=self.linear_list[i], out_features=self.linear_list[i+i], dtype = self.dtype, device = self.device))
 
     def forward(self,
                 X:torch.Tensor,
