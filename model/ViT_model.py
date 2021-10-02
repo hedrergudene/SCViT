@@ -168,15 +168,15 @@ class ReAttention(torch.nn.Module):
         k = torch.flatten(torch.stack([self.kconv2d(y) for y in unflatten(x, self.num_channels)], dim = 0), -3,-1).reshape(B, N, 1, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)[0]
         v = torch.flatten(torch.stack([self.vconv2d(y) for y in unflatten(x, self.num_channels)], dim = 0), -3,-1).reshape(B, N, 1, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)[0]
         attn = (torch.matmul(q, k.transpose(-2, -1))) * self.scale
-        attn = torch.nn.functional.softmax(attn, dim = -1)
-        attn = self.attn_drop(attn)
+        attn_soft = torch.nn.functional.softmax(attn, dim = -1)
+        attn_drop = self.attn_drop(attn_soft)
         if self.apply_transform:
-            attn = self.var_norm(self.reatten_matrix(attn)) * self.reatten_scale
-        attn_next = attn
-        x = (torch.matmul(attn, v)).transpose(1, 2).reshape(B, N, C)
-        x = self.proj(x)
-        x = self.proj_drop(x)
-        return x, attn_next
+            attn_norm = self.var_norm(self.reatten_matrix(attn_drop)) * self.reatten_scale
+        attn_next = attn_norm
+        x = (torch.matmul(attn_norm, v)).transpose(1, 2).reshape(B, N, C)
+        x_proj = self.proj(x)
+        x_drop = self.proj_drop(x_proj)
+        return x_drop, attn_next
 
 
 class ReAttentionTransformerEncoder(torch.nn.Module):
@@ -220,61 +220,11 @@ class ReAttentionTransformerEncoder(torch.nn.Module):
                                        )
     def forward(self, encoded_patches):
         encoded_patch_attn, _ = self.ReAttn(encoded_patches)
-        encoded_patches += encoded_patch_attn
+        encoded_patches = encoded_patch_attn + encoded_patches
         encoded_patches = self.LN(encoded_patches)
-        encoded_patches += self.FeedForward(encoded_patches)
+        encoded_patches = self.FeedForward(encoded_patches) + encoded_patches
         encoded_patches = self.LN(encoded_patches)
         return encoded_patches
-
-
-# Skip connections
-class SkipConnection(torch.nn.Module):
-    def __init__(self,
-                 dim,
-                 num_channels=3,
-                 num_heads=8,
-                 qkv_bias=False,
-                 attn_drop=0.,
-                 proj_drop=0.,
-                 transform_scale=False,
-                 device:str='cuda:0',
-                 ):
-        super().__init__()
-        self.num_heads = num_heads
-        self.num_channels = num_channels
-        head_dim = dim // num_heads
-        self.device = device
-        
-        # NOTE scale factor was wrong in my original version, can set manually to be compat with prev weights
-        self.scale = head_dim ** -0.5
-        self.reatten_matrix = torch.nn.Conv2d(self.num_heads,self.num_heads, 1, 1, device = self.device)
-        self.var_norm = torch.nn.BatchNorm2d(self.num_heads, device = self.device)
-        self.qconv2d = torch.nn.Conv2d(self.num_channels,self.num_channels,3,padding = 'same', bias=qkv_bias, device = self.device)
-        self.kconv2d = torch.nn.Conv2d(self.num_channels,self.num_channels,3,padding = 'same', bias=qkv_bias, device = self.device)
-        self.vconv2d = torch.nn.Conv2d(self.num_channels,self.num_channels,3,padding = 'same', bias=qkv_bias, device = self.device)
-
-        self.reatten_scale = self.scale if transform_scale else 1.0
-        self.attn_drop = torch.nn.Dropout(attn_drop)
-        self.proj = torch.nn.Linear(dim, dim, device = self.device)
-        self.proj_drop = torch.nn.Dropout(proj_drop)
-        
-
-    def forward(self, q, k, v):
-        assert q.shape==k.shape
-        assert k.shape==v.shape
-        B, N, C = q.shape
-        q = torch.flatten(torch.stack([self.qconv2d(y) for y in unflatten(q, self.num_channels)], dim = 0), -3,-1).reshape(B, N, 1, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)[0]
-        k = torch.flatten(torch.stack([self.kconv2d(y) for y in unflatten(k, self.num_channels)], dim = 0), -3,-1).reshape(B, N, 1, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)[0]
-        v = torch.flatten(torch.stack([self.vconv2d(y) for y in unflatten(v, self.num_channels)], dim = 0), -3,-1).reshape(B, N, 1, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)[0]
-        attn = (torch.matmul(q,k.transpose(-2, -1))) * self.scale
-        attn = torch.nn.functional.softmax(attn, dim = -1)
-        attn = self.attn_drop(attn)
-        attn = self.var_norm(self.reatten_matrix(attn)) * self.reatten_scale
-
-        x = torch.matmul(attn, v).transpose(1, 2).reshape(B, N, C)
-        x = self.proj(x)
-        x = self.proj_drop(x)
-        return x
 
 
 # Model architecture
