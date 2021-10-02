@@ -108,6 +108,7 @@ celerybeat.pid
 .env
 .venv
 env/
+models/
 venv/
 venv_deep_vit_macula/
 ENV/

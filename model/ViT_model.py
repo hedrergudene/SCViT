@@ -65,7 +65,7 @@ class PatchEncoder(torch.nn.Module):
                  num_channels:int,
                  preprocessing:str,
                  dtype:torch.dtype,
-                 device:str='cuda',
+                 device:str='cuda:0',
                  ):
         super(PatchEncoder, self).__init__()
         # Parameters
@@ -82,6 +82,7 @@ class PatchEncoder(torch.nn.Module):
         self.positions = torch.arange(start = 0,
                          end = self.num_patches_final,
                          step = 1,
+                         device = self.device,
                          )
 
         # Layers
@@ -113,7 +114,7 @@ class FeedForward(torch.nn.Module):
                  hidden_dim:int,
                  dropout:float,
                  dtype:torch.dtype,
-                 device:str = 'cuda',
+                 device:str = 'cuda:0',
                  ):
         super().__init__()
         self.device = device
@@ -140,7 +141,7 @@ class ReAttention(torch.nn.Module):
                  expansion_ratio = 3,
                  apply_transform=True,
                  transform_scale=False,
-                 device:str='cuda',
+                 device:str='cuda:0',
                  ):
         super().__init__()
         self.num_heads = num_heads
@@ -192,7 +193,7 @@ class ReAttentionTransformerEncoder(torch.nn.Module):
                  proj_drop:int,
                  linear_drop:float,
                  dtype:torch.dtype,
-                 device:str='cuda',
+                 device:str='cuda:0',
                  ):
         super().__init__()
         self.num_patches = num_patches
@@ -239,7 +240,7 @@ class SkipConnection(torch.nn.Module):
                  attn_drop=0.,
                  proj_drop=0.,
                  transform_scale=False,
-                 device:str='cuda',
+                 device:str='cuda:0',
                  ):
         super().__init__()
         self.num_heads = num_heads
@@ -295,7 +296,7 @@ class ViT_model(torch.nn.Module):
                  proj_drop:int,
                  linear_drop:float,
                  dtype:torch.dtype,
-                 device:str='cuda',
+                 device:str='cuda:0',
                  ):
         super().__init__()
         # Testing
@@ -346,8 +347,6 @@ class ViT_model(torch.nn.Module):
         
         # Output
         self.Tube = torch.nn.ModuleList()
-        if self.preprocessing == 'conv':
-            self.Tube.append(torch.nn.Conv2d(self.num_channels,1,3,padding = 'same', device = self.device))
         self.Tube.append(torch.nn.Flatten())
         self.linear_list = [self.num_patches*self.patch_size**2] + linear_list
         for i in range(len(linear_list)-1):
