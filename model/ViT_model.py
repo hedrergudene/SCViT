@@ -17,8 +17,8 @@ def patch(X:torch.Tensor,
     patch_list = []
     for row, col in itertools.product(range(h//patch_size), range(w//patch_size)):
         patch_list.append(patches[:,:,row,col,:,:])
-    patches = torch.stack(patch_list, dim = 1)
-    return patches
+    patches_final = torch.stack(patch_list, dim = 1)
+    return patches_final
 
 def unflatten(flattened, num_channels):
         # Alberto: Added to reconstruct from bs, n, projection_dim -> bs, n, c, h, w
@@ -44,7 +44,7 @@ def downsampling(encoded_patches, num_channels):
     ch, h, w = num_channels, int(np.sqrt(embeddings/num_channels)), int(np.sqrt(embeddings/num_channels))
     original_image = unpatch(unflatten(encoded_patches, num_channels), num_channels)
     new_patches = patch(original_image, patch_size = h//2)
-    new_patches_flattened = torch.nn.Flatten(start_dim = -3, end_dim = -1).forward(new_patches)
+    new_patches_flattened = torch.flatten(new_patches, start_dim = -3, end_dim = -1)
     return new_patches_flattened
 
 def upsampling(encoded_patches, num_channels):
@@ -52,7 +52,7 @@ def upsampling(encoded_patches, num_channels):
     ch, h, w = num_channels, int(np.sqrt(embeddings/num_channels)), int(np.sqrt(embeddings/num_channels))
     original_image = unpatch(unflatten(encoded_patches, num_channels), num_channels)
     new_patches = patch(original_image, patch_size = h*2)
-    new_patches_flattened = torch.nn.Flatten(start_dim = -3, end_dim = -1).forward(new_patches)
+    new_patches_flattened = torch.flatten(new_patches, start_dim = -3, end_dim = -1)
     return new_patches_flattened
 
 
