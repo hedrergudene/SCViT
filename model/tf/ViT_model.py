@@ -273,7 +273,7 @@ class SkipConnection(tf.keras.layers.Layer):
         return x
 
 # Model
-class ViT_UNet(tf.keras.layers.Layer):
+class ViT_UNet(tf.keras.Model):
     def __init__(self,
                  depth:int,
                  depth_te:int,
