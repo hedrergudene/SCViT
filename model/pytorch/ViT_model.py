@@ -291,6 +291,18 @@ class ViT_model(torch.nn.Module):
                                                   self.dtype,
                                                   )
                 )
+        self.Encoders.append(
+            ReAttentionTransformerEncoder(self.num_patches*4**(self.depth),
+                                            self.num_channels,
+                                            self.projection_dim//4**(self.depth),
+                                            self.hidden_dim//2**(self.depth),
+                                            self.num_heads,
+                                            self.attn_drop,
+                                            self.proj_drop,
+                                            self.linear_drop,
+                                            self.dtype,
+                                            )
+        )
         
         # Output
         self.Tube = torch.nn.ModuleList()
@@ -302,8 +314,6 @@ class ViT_model(torch.nn.Module):
     def forward(self,
                 X:torch.Tensor,
                 ):
-        # Previous validations
-        batch_size, ch, h, w = X.size()
         # "Preprocessing"
         X_patch = self.PE(X)
         # Encoders
