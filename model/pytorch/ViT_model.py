@@ -306,7 +306,7 @@ class ViT_model(torch.nn.Module):
         
         # Output
         self.Tube = torch.nn.ModuleList()
-        self.linear_list = [self.num_patches*self.patch_size**2] + self.linear_list
+        self.linear_list = [self.num_channels*self.num_patches*self.patch_size**2] + self.linear_list
         for i in range(len(self.linear_list)-1):
             self.Tube.append(torch.nn.Linear(in_features=self.linear_list[i], out_features=self.linear_list[i+1], dtype = self.dtype, device = self.device))
             self.Tube.append(torch.nn.Dropout(self.linear_drop))
@@ -322,7 +322,7 @@ class ViT_model(torch.nn.Module):
             if (i+1)%self.depth_te==0:
                 X_patch = downsampling(X_patch, self.num_channels)
         # Output
-        X_flat = torch.flatten(X_patch)
+        X_flat = torch.flatten(X_patch, 1, -1)
         for _, tube in enumerate(self.Tube):
             X_flat = tube(X_flat)
         return X_flat
