@@ -249,13 +249,13 @@ class ViT_model(torch.nn.Module):
         # Testing
         assert patch_size%(2**(depth))==0, f"Depth must be adjusted, final patch size is incompatible."
         assert patch_size//(2**(depth))>=4, f"Depth must be adjusted, final patch size is too small (lower than 4)."
-        print('Architecture information:')
-        for i in range(depth+1):
-            print('Level {}:'.format(i))
-            print('\tPatch size:',patch_size//(2**i))
-            print('\tNum. patches:',num_patches*(4**i))
-            print('\tProjection size:',(num_channels*patch_size**2)//(4**i))
-            print('\tHidden dim. size:',hidden_dim//(2**i))
+        #print('Architecture information:')
+        #for i in range(depth+1):
+        #    print('Level {}:'.format(i))
+        #    print('\tPatch size:',patch_size//(2**i))
+        #    print('\tNum. patches:',num_patches*(4**i))
+        #    print('\tProjection size:',(num_channels*patch_size**2)//(4**i))
+        #    print('\tHidden dim. size:',hidden_dim//(2**i))
         # Parameters
         self.depth = depth
         self.depth_te = depth_te
@@ -306,10 +306,9 @@ class ViT_model(torch.nn.Module):
         
         # Output
         self.Tube = torch.nn.ModuleList()
-        self.Tube.append(torch.nn.Flatten())
-        self.linear_list = [self.num_patches*self.patch_size**2] + linear_list
-        for i in range(len(linear_list)-1):
-            self.Tube.append(torch.nn.Linear(in_features=self.linear_list[i], out_features=self.linear_list[i+i], dtype = self.dtype, device = self.device))
+        self.linear_list = [self.num_patches*self.patch_size**2] + self.linear_list
+        for i in range(len(self.linear_list)-1):
+            self.Tube.append(torch.nn.Linear(in_features=self.linear_list[i], out_features=self.linear_list[i+1], dtype = self.dtype, device = self.device))
             self.Tube.append(torch.nn.Dropout(self.linear_drop))
 
     def forward(self,
@@ -323,6 +322,7 @@ class ViT_model(torch.nn.Module):
             if (i+1)%self.depth_te==0:
                 X_patch = downsampling(X_patch, self.num_channels)
         # Output
-        for i, tube in enumerate(self.Tube):
-            X_patch = tube(X_patch)
-        return X_patch
+        X_flat = torch.flatten(X_patch)
+        for _, tube in enumerate(self.Tube):
+            X_flat = tube(X_flat)
+        return X_flat
