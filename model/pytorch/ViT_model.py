@@ -69,9 +69,9 @@ class PatchEncoder(torch.nn.Module):
         self.depth = depth
         self.patch_size = patch_size
         self.num_channels = num_channels
-        self.patch_size_final = self.patch_size//(2**self.depth)
+        self.patch_size_final = self.patch_size//(2**(self.depth-1))
         self.num_patches = num_patches
-        self.num_patches_final = self.num_patches*(4**self.depth)
+        self.num_patches_final = self.num_patches*(4**(self.depth-1))
         assert preprocessing in ['conv', 'fourier', 'none'], f"Preprocessing can only be 'conv', 'fourier' or 'none'."
         self.preprocessing = preprocessing
         self.dtype = dtype
