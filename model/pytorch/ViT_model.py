@@ -291,18 +291,6 @@ class ViT_model(torch.nn.Module):
                                                   self.dtype,
                                                   )
                 )
-        self.Encoders.append(
-            ReAttentionTransformerEncoder(self.num_patches*4**(self.depth),
-                                            self.num_channels,
-                                            self.projection_dim//4**(self.depth),
-                                            self.hidden_dim//2**(self.depth),
-                                            self.num_heads,
-                                            self.attn_drop,
-                                            self.proj_drop,
-                                            self.linear_drop,
-                                            self.dtype,
-                                            )
-        )
         
         # Output
         self.Tube = torch.nn.ModuleList()
