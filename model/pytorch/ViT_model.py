@@ -310,6 +310,7 @@ class ViT_model(torch.nn.Module):
         self.linear_list = [self.num_patches*self.patch_size**2] + linear_list
         for i in range(len(linear_list)-1):
             self.Tube.append(torch.nn.Linear(in_features=self.linear_list[i], out_features=self.linear_list[i+i], dtype = self.dtype, device = self.device))
+            self.Tube.append(torch.nn.Dropout(self.linear_drop))
 
     def forward(self,
                 X:torch.Tensor,

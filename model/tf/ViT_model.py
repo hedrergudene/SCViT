@@ -3,72 +3,74 @@ from typing import List
 import numpy as np
 
 # Auxiliary methods
+def get_shape(X:tf.Tensor):
+  return X.shape.as_list()
+
 def patch(X:tf.Tensor,
+          batch_size:int,
           patch_size:int,
+          num_channels:int,
           ):
+
+    def patches_2d(X:tf.Tensor):
+        h, w = get_shape(X)
+        X_middle = tf.stack(tf.split(X,h//patch_size, axis = 0), axis = 0)
+        X_final = tf.map_fn(fn=lambda y: tf.stack(tf.split(y,w//patch_size, axis = 1), axis = 0), elems = X_middle)
+        X_final = tf.reshape(X_final, shape=[-1,patch_size,patch_size])
+        return X_final
+
     if len(X.shape)==5:
         X = tf.squeeze(X, axis=1)
-    batch_size, h, w, channels = tf.shape(X)
+    _, h, w, _ = X.shape.as_list()
     assert h%patch_size==0, f"Patch size must divide images height"
     assert w%patch_size==0, f"Patch size must divide images width"
-    patches_tf = tf.image.extract_patches(X,
-                                          sizes = [1, patch_size, patch_size, 1],
-                                          strides = [1, patch_size, patch_size, 1],
-                                          rates = [1,1,1,1],
-                                          padding = 'VALID')
-    patches_tf = tf.reshape(patches_tf,[batch_size,-1,patch_size,patch_size,3])
+    X = tf.transpose(X, perm=[0,3,1,2])
+    patches_tf = tf.map_fn(fn=lambda y: tf.map_fn(fn = lambda z: patches_2d(z), elems = y),
+                           elems = X,
+                           )
+    patches_tf = tf.transpose(patches_tf, [0,2,3,4,1])
     return patches_tf
 
-def unflatten(flattened, num_channels):
-        # Alberto: Added to reconstruct from bs, n, projection_dim -> bs, n, c, h, w
-        bs, n, p = flattened.shape
-        unflattened = tf.reshape(flattened, (bs, n, int(np.sqrt(p//num_channels)), int(np.sqrt(p//num_channels)), num_channels))
-        return unflattened
+def unflatten(flattened, batch_size, num_channels):
+    # Alberto: Added to reconstruct from bs, n, projection_dim -> bs, n, c, h, w
+    _, n, p = get_shape(flattened)
+    unflattened = tf.reshape(flattened, (batch_size, n, int(np.sqrt(p//num_channels)), int(np.sqrt(p//num_channels)), num_channels))
+    return unflattened
 
-def unpatch(x, num_channels):
+def unpatch(x, batch_size, num_channels):
     if len(x.shape) < 5:
-        batch_size, num_patches, h, w, ch = unflatten(x, num_channels).shape
+        _, num_patches, h, w, ch = get_shape(unflatten(x, batch_size, num_channels))
     else:
-        batch_size, num_patches, h, w, ch = x.shape
+        _, num_patches, h, w, ch = get_shape(x)
     assert ch==num_channels, f"Num. channels must agree"
     elem_per_axis = int(np.sqrt(num_patches))
-    patches_middle = tf.stack([tf.concat([patch for patch in tf.reshape(x, shape=[batch_size,elem_per_axis,elem_per_axis,h,w,ch])[i]], axis = -3) for i in range(batch_size)], axis = 0)
-    restored_images = tf.reshape(tf.stack([tf.concat([patch for patch in patches_middle[i]], axis = -2) for i in range(batch_size)], axis = 0), shape=[batch_size,1,h*elem_per_axis,w*elem_per_axis,ch])
+    x = tf.stack(tf.split(x, elem_per_axis, axis = 1), axis = 1)
+    patches_middle = tf.stack([tf.concat(tf.unstack(x, axis = 1), axis = -3) for i in range(batch_size)], axis = 0)
+    restored_images = tf.reshape(tf.stack([tf.concat(tf.unstack(patches_middle, axis = 2), axis = -2) for i in range(batch_size)], axis = 0), shape=[batch_size,1,h*elem_per_axis,w*elem_per_axis,ch])
     return restored_images
 
-def downsampling(encoded_patches, num_channels):
-    _, _, embeddings = encoded_patches.size()
+def downsampling(encoded_patches, batch_size, num_channels):
+    _, _, embeddings = get_shape(encoded_patches)
     h, w, _ = int(np.sqrt(embeddings/num_channels)), int(np.sqrt(embeddings/num_channels)), num_channels
-    original_image = unpatch(unflatten(encoded_patches, num_channels), num_channels)
-    new_patches = patch(original_image, patch_size = h//2)
+    original_image = unpatch(unflatten(encoded_patches, batch_size, num_channels), batch_size, num_channels)
+    new_patches = patch(original_image, batch_size, patch_size = h//2, num_channels = num_channels)
     new_patches_flattened = tf.reshape(new_patches, shape=[new_patches.shape[0], new_patches.shape[1], -1])
     return new_patches_flattened
 
-def upsampling(encoded_patches, num_channels):
-    _, _, embeddings = encoded_patches.size()
+def upsampling(encoded_patches, batch_size, num_channels):
+    _, _, embeddings = get_shape(encoded_patches)
     h, w, _ = int(np.sqrt(embeddings/num_channels)), int(np.sqrt(embeddings/num_channels)), num_channels
-    original_image = unpatch(unflatten(encoded_patches, num_channels), num_channels)
-    new_patches = patch(original_image, patch_size = h*2)
+    original_image = unpatch(unflatten(encoded_patches, batch_size, num_channels), batch_size, num_channels)
+    new_patches = patch(original_image, batch_size, patch_size = h*2, num_channels = num_channels)
     new_patches_flattened = tf.reshape(new_patches, shape=[new_patches.shape[0], new_patches.shape[1], -1])
     return new_patches_flattened
-
-def create_queries(self, x, letter):
-    if letter=='q':
-        x = tf.stack([self.qconv2d(y) for y in unflatten(x, self.num_channels)], axis = 0)
-    if letter == 'k':
-        x = tf.stack([self.qconv2d(y) for y in unflatten(x, self.num_channels)], axis = 0)
-    if letter == 'v':
-        x = tf.stack([self.qconv2d(y) for y in unflatten(x, self.num_channels)], axis = 0)
-    x = tf.reshape(x, shape=[x.shape[0], x.shape[1], -1])
-    x = tf.reshape(x, shape = [x.shape[0], x.shape[1], self.num_heads, x.shape[2]//self.num_heads, 1])
-    x = tf.transpose(x, perm = [4,0,2,1,3])
-    return x[0]
 
 
 # Patch Encoder
 class PatchEncoder(tf.keras.layers.Layer):
     def __init__(self,
                  depth:int,
+                 batch_size:int,
                  num_patches:int,
                  patch_size:int,
                  num_channels:int,
@@ -77,6 +79,7 @@ class PatchEncoder(tf.keras.layers.Layer):
         super(PatchEncoder, self).__init__()
         # Parameters
         self.depth = depth
+        self.batch_size = batch_size
         self.patch_size = patch_size
         self.num_channels = num_channels
         self.patch_size_final = self.patch_size//(2**self.depth)
@@ -101,13 +104,12 @@ class PatchEncoder(tf.keras.layers.Layer):
             X = self.conv2d(X)
         elif self.preprocessing == 'fourier':
             X = tf.math.real(tf.signal.fft2d(X))
-        patches = patch(X, self.patch_size_final)
-        batch_size, _, _, _, _ = patches.shape
-        flat_patches = tf.reshape(patches, shape = [batch_size, self.num_patches_final,-1])
-        encoded = flat_patches + self.position_embedding(self.positions)
-        encoded = unflatten(encoded, self.num_channels)
-        encoded = unpatch(encoded, self.num_channels)
-        encoded = tf.reshape(patch(encoded, patch_size = self.patch_size), shape = [batch_size, self.num_patches,-1])
+        patches = patch(X, self.batch_size, self.patch_size_final, self.num_channels)
+        flat_patches = tf.reshape(patches, shape = [self.batch_size, self.num_patches_final,-1])
+        encoded = tf.map_fn(fn=lambda y: y + self.position_embedding(self.positions), elems = flat_patches)
+        encoded = unflatten(encoded, self.batch_size, self.num_channels)
+        encoded = unpatch(encoded, self.batch_size, self.num_channels)
+        encoded = tf.reshape(patch(encoded, batch_size = self.batch_size, patch_size = self.patch_size, num_channels = self.num_channels), shape = [self.batch_size, self.num_patches,-1])
         return encoded
 
 
@@ -126,7 +128,7 @@ class FeedForward(tf.keras.layers.Layer):
         self.D2 = tf.keras.layers.Dense(projection_dim)
         self.Drop2 = tf.keras.layers.Dropout(dropout)
 
-    def forward(self, x):
+    def call(self, x):
         x = self.D1(x)
         x = tf.keras.activations.gelu(x)
         x = self.Drop1(x)
@@ -138,6 +140,8 @@ class FeedForward(tf.keras.layers.Layer):
 class ReAttention(tf.keras.layers.Layer):
     def __init__(self,
                  dim,
+                 batch_size,
+                 num_patches,
                  num_channels=3,
                  num_heads=8,
                  qkv_bias=False,
@@ -149,13 +153,15 @@ class ReAttention(tf.keras.layers.Layer):
                  transform_scale=False,
                  ):
         super().__init__()
+        self.batch_size = batch_size
         self.num_heads = num_heads
         self.num_channels = num_channels
+        self.num_patches = num_patches
         head_dim = dim // num_heads
         self.apply_transform = apply_transform
         self.scale = qk_scale or head_dim ** -0.5
         if apply_transform:
-            self.reatten_matrix = tf.keras.layers.Conv2D(self.num_heads, 1)
+            self.reatten_matrix = tf.keras.layers.Conv2D(self.num_patches, 1)
             self.var_norm = tf.keras.layers.BatchNormalization()
             self.qconv2d = tf.keras.layers.Conv2D(self.num_channels,3,padding = 'same', use_bias=qkv_bias)
             self.kconv2d = tf.keras.layers.Conv2D(self.num_channels,3,padding = 'same', use_bias=qkv_bias)
@@ -169,19 +175,35 @@ class ReAttention(tf.keras.layers.Layer):
         self.attn_drop = tf.keras.layers.Dropout(attn_drop)
         self.proj = tf.keras.layers.Dense(dim)
         self.proj_drop = tf.keras.layers.Dropout(proj_drop)
+    
+    def create_queries(self, x, letter):
+        if letter=='q':
+            x = unflatten(x, self.batch_size, self.num_channels)
+            x = tf.map_fn(fn=lambda y: self.qconv2d(y), elems=x)
+        if letter == 'k':
+            x = unflatten(x, self.batch_size, self.num_channels)
+            x = tf.map_fn(fn=lambda y: self.kconv2d(y), elems=x)
+        if letter == 'v':
+            x = unflatten(x, self.batch_size, self.num_channels)
+            x = tf.map_fn(fn=lambda y: self.vconv2d(y), elems=x)
 
-    def forward(self, x, atten=None):
-        B, N, C = x.shape
-        q = create_queries(x, 'q')
-        k = create_queries(x, 'k')
-        v = create_queries(x, 'v')
-        attn = (tf.linalg.matmul(q,tf.transpose(k, perm = [0,1,3,2]))) * self.scale
+        x = tf.reshape(x, shape=[self.batch_size, x.shape[1], -1])
+        x = tf.reshape(x, shape = [self.batch_size, x.shape[1], self.num_heads, x.shape[2]//self.num_heads, 1])
+        x = tf.transpose(x, perm = [4,0,2,1,3])
+        return x[0]
+
+    def call(self, x, atten=None):
+        _, N, C = x.shape
+        q = self.create_queries(x, 'q')
+        k = self.create_queries(x, 'k')
+        v = self.create_queries(x, 'v')
+        attn = (tf.linalg.matmul(q, k, transpose_b = True)) * self.scale
         attn = tf.keras.activations.softmax(attn, axis = -1)
         attn = self.attn_drop(attn)
         if self.apply_transform:
             attn = self.var_norm(self.reatten_matrix(attn)) * self.reatten_scale
         attn_next = attn
-        x = tf.transpose(tf.linalg.matmul(attn, v), perm = [0,2,1,3]).reshape(B, N, C)
+        x = tf.reshape(tf.transpose(tf.linalg.matmul(attn, v), perm = [0,2,1,3]), shape = [self.batch_size, N, C])
         x = self.proj(x)
         x = self.proj_drop(x)
         return x, attn_next
@@ -189,6 +211,7 @@ class ReAttention(tf.keras.layers.Layer):
 ## Transformer Encoder
 class ReAttentionTransformerEncoder(tf.keras.layers.Layer):
     def __init__(self,
+                 batch_size:int,
                  num_patches:int,
                  num_channels:int,
                  projection_dim:int,
@@ -199,6 +222,7 @@ class ReAttentionTransformerEncoder(tf.keras.layers.Layer):
                  linear_drop:float,
                  ):
         super().__init__()
+        self.batch_size = batch_size
         self.num_patches = num_patches
         self.num_channels = num_channels
         self.projection_dim = projection_dim
@@ -208,6 +232,8 @@ class ReAttentionTransformerEncoder(tf.keras.layers.Layer):
         self.proj_drop = proj_drop
         self.linear_drop = linear_drop
         self.ReAttn = ReAttention(self.projection_dim,
+                                  batch_size = self.batch_size,
+                                  num_patches = self.num_patches,
                                   num_channels = self.num_channels,
                                   num_heads = self.num_heads,
                                   attn_drop = self.attn_drop,
@@ -219,7 +245,7 @@ class ReAttentionTransformerEncoder(tf.keras.layers.Layer):
                                        hidden_dim = self.hidden_dim,
                                        dropout = self.linear_drop,
                                        )
-    def forward(self, encoded_patches):
+    def call(self, encoded_patches):
         encoded_patch_attn, _ = self.ReAttn(encoded_patches)
         encoded_patches = encoded_patch_attn + encoded_patches
         encoded_patches = self.LN1(encoded_patches)
@@ -236,6 +262,8 @@ class SkipConnection(tf.keras.layers.Layer):
     """
     def __init__(self,
                  dim,
+                 batch_size,
+                 num_patches,
                  num_channels=3,
                  num_heads=8,
                  qkv_bias=False,
@@ -244,11 +272,13 @@ class SkipConnection(tf.keras.layers.Layer):
                  transform_scale=False,
                  ):
         super().__init__()
+        self.batch_size = batch_size
         self.num_heads = num_heads
         self.num_channels = num_channels
+        self.num_patches = num_patches
         head_dim = dim // num_heads
         self.scale = head_dim ** -0.5
-        self.reatten_matrix = tf.keras.layers.Conv2D(self.num_heads, 1)
+        self.reatten_matrix = tf.keras.layers.Conv2D(self.num_patches, 1)
         self.var_norm = tf.keras.layers.BatchNormalization()
         self.qconv2d = tf.keras.layers.Conv2D(self.num_channels,3,padding = 'same', use_bias=qkv_bias)
         self.kconv2d = tf.keras.layers.Conv2D(self.num_channels,3,padding = 'same', use_bias=qkv_bias)
@@ -257,17 +287,33 @@ class SkipConnection(tf.keras.layers.Layer):
         self.attn_drop = tf.keras.layers.Dropout(attn_drop)
         self.proj = tf.keras.layers.Dense(dim)
         self.proj_drop = tf.keras.layers.Dropout(proj_drop)
+    
+    def create_queries(self, x, letter):
+        if letter=='q':
+            x = unflatten(x, self.batch_size, self.num_channels)
+            x = tf.map_fn(fn=lambda y: self.qconv2d(y), elems=x)
+        if letter == 'k':
+            x = unflatten(x, self.batch_size, self.num_channels)
+            x = tf.map_fn(fn=lambda y: self.kconv2d(y), elems=x)
+        if letter == 'v':
+            x = unflatten(x, self.batch_size, self.num_channels)
+            x = tf.map_fn(fn=lambda y: self.vconv2d(y), elems=x)
+
+        x = tf.reshape(x, shape=[self.batch_size, x.shape[1], -1])
+        x = tf.reshape(x, shape = [self.batch_size, x.shape[1], self.num_heads, x.shape[2]//self.num_heads, 1])
+        x = tf.transpose(x, perm = [4,0,2,1,3])
+        return x[0]
         
-    def forward(self, q,k,v):
+    def call(self, q,k,v):
         B, N, C = q.shape
-        q = create_queries(q, 'q')
-        k = create_queries(k, 'k')
-        v = create_queries(v, 'v')
+        q = self.create_queries(q, 'q')
+        k = self.create_queries(k, 'k')
+        v = self.create_queries(v, 'v')
         attn = (tf.linalg.matmul(q,tf.transpose(k, perm = [0,1,3,2]))) * self.scale
         attn = tf.keras.activations.softmax(attn, axis = -1)
         attn = self.attn_drop(attn)
         attn = self.var_norm(self.reatten_matrix(attn)) * self.reatten_scale
-        x = tf.transpose(tf.linalg.matmul(attn, v), perm = [0,2,1,3]).reshape(B, N, C)
+        x = tf.reshape(tf.transpose(tf.linalg.matmul(attn, v), perm = [0,2,1,3]), shape = [B, N, C])
         x = self.proj(x)
         x = self.proj_drop(x)
         return x
