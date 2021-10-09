@@ -36,19 +36,12 @@ def unpatch(x, num_channels):
 
 
 # Auxiliary methods to downsampling & upsampling
-def downsampling(encoded_patches, num_channels):
-    _, _, embeddings = encoded_patches.size()
-    ch, h, w = num_channels, int(np.sqrt(embeddings/num_channels)), int(np.sqrt(embeddings/num_channels))
+def resampling(encoded_patches:torch.Tensor,
+               patch_size:List[int]=[16,8],
+               num_channels:int=1,
+               ):
     original_image = unpatch(unflatten(encoded_patches, num_channels), num_channels)
-    new_patches = patch(original_image, patch_size = h//2)
-    new_patches_flattened = torch.flatten(new_patches, start_dim = -3, end_dim = -1)
-    return new_patches_flattened
-
-def upsampling(encoded_patches, num_channels):
-    _, _, embeddings = encoded_patches.size()
-    ch, h, w = num_channels, int(np.sqrt(embeddings/num_channels)), int(np.sqrt(embeddings/num_channels))
-    original_image = unpatch(unflatten(encoded_patches, num_channels), num_channels)
-    new_patches = patch(original_image, patch_size = h*2)
+    new_patches = patch(original_image, patch_size = patch_size[1])
     new_patches_flattened = torch.flatten(new_patches, start_dim = -3, end_dim = -1)
     return new_patches_flattened
 
@@ -56,52 +49,48 @@ def upsampling(encoded_patches, num_channels):
 # Class PatchEncoder, to include initial and positional encoding
 class PatchEncoder(torch.nn.Module):
     def __init__(self,
-                 depth:int,
-                 num_patches:int,
-                 patch_size:int,
-                 num_channels:int,
-                 preprocessing:str,
-                 dtype:torch.dtype,
+                 img_size:int=128,
+                 patch_size:List[int]=[16,8],
+                 num_channels:int=1,
                  device:str='cuda:0',
                  ):
         super(PatchEncoder, self).__init__()
         # Parameters
-        self.depth = depth
+        self.img_size = img_size
         self.patch_size = patch_size
         self.num_channels = num_channels
-        self.patch_size_final = self.patch_size//(2**(self.depth-1))
-        self.num_patches = num_patches
-        self.num_patches_final = self.num_patches*(4**(self.depth-1))
-        assert preprocessing in ['conv', 'fourier', 'none'], f"Preprocessing can only be 'conv', 'fourier' or 'none'."
-        self.preprocessing = preprocessing
-        self.dtype = dtype
+        self.num_patches = [(self.img_size//patch)**2 for patch in self.patch_size]
+        self.projection_dim = [self.num_channels*patch**2 for patch in self.patch_size]
         self.device = device
-        self.positions = torch.arange(start = 0,
-                         end = self.num_patches_final,
-                         step = 1,
-                         device = self.device,
-                         )
-
+        if self.patch_size[0]>self.patch_size[1]:
+            self.positions = torch.arange(start = 0,
+                             end = self.num_patches[1],
+                             step = 1,
+                             device = self.device,
+                             )
+        else:
+            self.positions = torch.arange(start = 0,
+                             end = self.num_patches[0],
+                             step = 1,
+                             device = self.device,
+                             )
         # Layers
-        if self.preprocessing == "conv":
-            self.conv2d = torch.nn.Conv2d(self.num_channels, self.num_channels, 3, padding = 'same', device = self.device)
+        self.linear = torch.nn.Linear(self.projection_dim[0], self.projection_dim[0])
         self.position_embedding = torch.nn.Embedding(num_embeddings=self.num_patches_final,
                                                      embedding_dim = self.num_channels*self.patch_size_final**2,
                                                      device = self.device,
                                                      )
 
     def forward(self, X):
-        if self.preprocessing == 'conv':
-            X = self.conv2d(X)
-        elif self.preprocessing == 'fourier':
-            X = torch.fft.fft2(X).real
-        patches = patch(X, self.patch_size_final)
-        flat_patches = torch.flatten(patches, -3, -1)
-        encoded = flat_patches + self.position_embedding(self.positions)
-        encoded = unflatten(encoded, self.num_channels)
-        encoded = unpatch(encoded, self.num_channels)
-        encoded = torch.flatten(patch(encoded, patch_size = self.patch_size), -3, -1)
-        return encoded
+        if self.patch_size[0]>self.patch_size[1]:
+            patches = patch(X, self.patch_size[1])
+            flat_patches = torch.flatten(patches, -3, -1)
+            encoded = flat_patches + self.position_embedding(self.positions)
+            encoded = unflatten(encoded, self.num_channels)
+            encoded = unpatch(encoded, self.num_channels)
+            encoded = torch.flatten(patch(encoded, patch_size = self.patch_size[0]), -3, -1)
+            encoded = self.linear(encoded)
+            return encoded
 
 
 # AutoEncoder implementation
@@ -162,6 +151,7 @@ class ReAttention(torch.nn.Module):
         self.attn_drop = torch.nn.Dropout(attn_drop)
         self.proj = torch.nn.Linear(dim, dim, device = self.device)
         self.proj_drop = torch.nn.Dropout(proj_drop)
+
     def forward(self, x, atten=None):
         B, N, C = x.shape
         q = torch.flatten(torch.stack([self.qconv2d(y) for y in unflatten(x, self.num_channels)], dim = 0), -3,-1).reshape(B, N, 1, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)[0]
@@ -233,44 +223,34 @@ class ViT_model(torch.nn.Module):
                  depth:int,
                  depth_te:int,
                  linear_list:List[int],
-                 preprocessing:str,
-                 num_patches:int,
-                 patch_size:int,
-                 num_channels:int,
-                 hidden_dim:int,
-                 num_heads:int,
-                 attn_drop:int,
-                 proj_drop:int,
-                 linear_drop:float,
-                 dtype:torch.dtype,
+                 img_size:int=128,
+                 patch_size:List[int]=[16,8],
+                 num_channels:int=1,
+                 hidden_dim_factor:float=2.,
+                 num_heads:int=8,
+                 attn_drop:int=.2,
+                 proj_drop:int=.2,
+                 linear_drop:float=.4,
                  device:str='cuda:0',
                  ):
         super().__init__()
         # Testing
         assert patch_size%(2**(depth))==0, f"Depth must be adjusted, final patch size is incompatible."
         assert patch_size//(2**(depth))>=4, f"Depth must be adjusted, final patch size is too small (lower than 4)."
-        #print('Architecture information:')
-        #for i in range(depth+1):
-        #    print('Level {}:'.format(i))
-        #    print('\tPatch size:',patch_size//(2**i))
-        #    print('\tNum. patches:',num_patches*(4**i))
-        #    print('\tProjection size:',(num_channels*patch_size**2)//(4**i))
-        #    print('\tHidden dim. size:',hidden_dim//(2**i))
         # Parameters
         self.depth = depth
         self.depth_te = depth_te
         self.linear_list = linear_list
-        self.preprocessing = preprocessing
-        self.num_patches = num_patches
+        self.img_size = img_size
         self.patch_size = patch_size
         self.num_channels = num_channels
+        self.num_patches = (self.img_size//self.patch_size)**2
         self.projection_dim = self.num_channels*(self.patch_size)**2
-        self.hidden_dim = hidden_dim
+        self.hidden_dim_factor = hidden_dim_factor
         self.num_heads = num_heads
         self.attn_drop = attn_drop
         self.proj_drop = proj_drop
         self.linear_drop = linear_drop
-        self.dtype = dtype
         self.device = device
         # Layers
         self.PE = PatchEncoder(self.depth,self.num_patches,self.patch_size,self.num_channels,self.preprocessing,self.dtype)
