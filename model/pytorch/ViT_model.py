@@ -91,24 +91,29 @@ class PatchEncoder(torch.nn.Module):
             encoded = torch.flatten(patch(encoded, patch_size = self.patch_size[0]), -3, -1)
             encoded = self.linear(encoded)
             return encoded
+        else:
+            patches = patch(X, self.patch_size[0])
+            flat_patches = torch.flatten(patches, -3, -1)
+            encoded = flat_patches + self.position_embedding(self.positions)
+            encoded = self.linear(encoded)
+            return encoded
 
 
 # AutoEncoder implementation
 class FeedForward(torch.nn.Module):
     def __init__(self,
                  projection_dim:int,
-                 hidden_dim:int,
-                 dropout:float,
-                 dtype:torch.dtype,
+                 hidden_dim_factor:float=2.,
+                 dropout:float=.2,
                  device:str = 'cuda:0',
                  ):
         super().__init__()
         self.device = device
         self.net = torch.nn.Sequential(
-            torch.nn.Linear(projection_dim, hidden_dim, dtype = dtype, device = self.device),
+            torch.nn.Linear(projection_dim, int(hidden_dim_factor*projection_dim), device = self.device),
             torch.nn.GELU(),
             torch.nn.Dropout(dropout),
-            torch.nn.Linear(hidden_dim, projection_dim, dtype = dtype, device = self.device),
+            torch.nn.Linear(int(hidden_dim_factor*projection_dim), projection_dim, device = self.device),
             torch.nn.Dropout(dropout),
         )
     def forward(self, x):
@@ -120,11 +125,10 @@ class ReAttention(torch.nn.Module):
                  dim,
                  num_channels=3,
                  num_heads=8,
-                 qkv_bias=False,
+                 qkv_bias=True,
                  qk_scale=None,
-                 attn_drop=0.,
-                 proj_drop=0.,
-                 expansion_ratio = 3,
+                 attn_drop=0.2,
+                 proj_drop=0.2,
                  apply_transform=True,
                  transform_scale=False,
                  device:str='cuda:0',
@@ -152,7 +156,7 @@ class ReAttention(torch.nn.Module):
         self.proj = torch.nn.Linear(dim, dim, device = self.device)
         self.proj_drop = torch.nn.Dropout(proj_drop)
 
-    def forward(self, x, atten=None):
+    def forward(self, x:torch.Tensor):
         B, N, C = x.shape
         q = torch.flatten(torch.stack([self.qconv2d(y) for y in unflatten(x, self.num_channels)], dim = 0), -3,-1).reshape(B, N, 1, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)[0]
         k = torch.flatten(torch.stack([self.kconv2d(y) for y in unflatten(x, self.num_channels)], dim = 0), -3,-1).reshape(B, N, 1, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)[0]
@@ -169,109 +173,118 @@ class ReAttention(torch.nn.Module):
         return x_drop, attn_next
 
 
-class ReAttentionTransformerEncoder(torch.nn.Module):
+class ReAttentionTransformerBlock(torch.nn.Module):
     def __init__(self,
-                 num_patches:int,
-                 num_channels:int,
-                 projection_dim:int,
-                 hidden_dim:int,
-                 num_heads:int,
-                 attn_drop:int,
-                 proj_drop:int,
-                 linear_drop:float,
-                 dtype:torch.dtype,
+                 img_size:int=128,
+                 patch_size:int=16,
+                 num_channels:int=1,
+                 hidden_dim_factor:float=2.,
+                 num_heads:int=8,
+                 attn_drop:int=.2,
+                 proj_drop:int=.2,
+                 linear_drop:float=.2,
+                 transformer_blocks:int=5,
                  device:str='cuda:0',
                  ):
         super().__init__()
-        self.num_patches = num_patches
+        # Parameters
+        self.img_size = img_size
+        self.patch_size = patch_size
         self.num_channels = num_channels
-        self.projection_dim = projection_dim
-        self.hidden_dim = hidden_dim
+        self.num_patches = (self.img_size//self.patch_size)**2
+        self.projection_dim = self.num_channels*self.patch_size**2
+        self.hidden_dim_factor = hidden_dim_factor
         self.num_heads = num_heads
         self.attn_drop = attn_drop
         self.proj_drop = proj_drop
         self.linear_drop = linear_drop
-        self.dtype = dtype
+        self.transformer_blocks = transformer_blocks
         self.device = device
-        self.ReAttn = ReAttention(self.projection_dim,
-                                  num_channels = self.num_channels,
-                                  num_heads = self.num_heads,
-                                  attn_drop = self.attn_drop,
-                                  proj_drop = self.proj_drop,
-                                  )
-        self.LN = torch.nn.LayerNorm(normalized_shape = (self.num_patches, self.projection_dim),
-                                     dtype = self.dtype,
+        # Layers
+        self.ReAttn = torch.nn.ModuleList()
+        self.LN1 = torch.nn.ModuleList()
+        self.LN2 = torch.nn.ModuleList()
+        self.FF = torch.nn.ModuleList()
+        for _ in range(self.transformer_layers):
+            self.ReAttn.append(ReAttention(self.projection_dim,
+                                           num_channels = self.num_channels,
+                                           num_heads = self.num_heads,
+                                           attn_drop = self.attn_drop,
+                                           proj_drop = self.proj_drop,
+                                           )
+                                )
+            self.LN1.append(torch.nn.LayerNorm(normalized_shape = (self.num_patches, self.projection_dim),
                                      device = self.device,
                                      )
-        self.FeedForward = FeedForward(projection_dim = self.projection_dim,
-                                       hidden_dim = self.hidden_dim,
+                            )
+            self.LN2.append(torch.nn.LayerNorm(normalized_shape = (self.num_patches, self.projection_dim),
+                                     device = self.device,
+                                     )
+                            )
+            self.FF.append(FeedForward(projection_dim = self.projection_dim,
+                                       hidden_dim_factor = self.hidden_dim_factor,
                                        dropout = self.linear_drop,
-                                       dtype = self.dtype,
                                        )
+                            )            
+
+
     def forward(self, encoded_patches):
-        encoded_patch_attn, _ = self.ReAttn(encoded_patches)
-        encoded_patches = encoded_patch_attn + encoded_patches
-        encoded_patches = self.LN(encoded_patches)
-        encoded_patches = self.FeedForward(encoded_patches) + encoded_patches
-        encoded_patches = self.LN(encoded_patches)
+        for i in range(self.transformer_layers):
+            encoded_patch_attn, _ = self.ReAttn[i](encoded_patches)
+            encoded_patches = encoded_patch_attn + encoded_patches
+            encoded_patches = self.LN1[i](encoded_patches)
+            encoded_patches = self.FF[i](encoded_patches) + encoded_patches
+            encoded_patches = self.LN2[i](encoded_patches)
         return encoded_patches
 
 
 # Model architecture
 class ViT_model(torch.nn.Module):
     def __init__(self,
-                 depth:int,
-                 depth_te:int,
-                 linear_list:List[int],
                  img_size:int=128,
                  patch_size:List[int]=[16,8],
+                 transformer_blocks:List[int]=[5,5],
                  num_channels:int=1,
                  hidden_dim_factor:float=2.,
                  num_heads:int=8,
                  attn_drop:int=.2,
                  proj_drop:int=.2,
+                 linear_list:List[int]=[2048,1024],
                  linear_drop:float=.4,
                  device:str='cuda:0',
                  ):
         super().__init__()
-        # Testing
-        assert patch_size%(2**(depth))==0, f"Depth must be adjusted, final patch size is incompatible."
-        assert patch_size//(2**(depth))>=4, f"Depth must be adjusted, final patch size is too small (lower than 4)."
         # Parameters
-        self.depth = depth
-        self.depth_te = depth_te
-        self.linear_list = linear_list
         self.img_size = img_size
         self.patch_size = patch_size
+        self.transformer_blocks = transformer_blocks
         self.num_channels = num_channels
-        self.num_patches = (self.img_size//self.patch_size)**2
-        self.projection_dim = self.num_channels*(self.patch_size)**2
+        self.num_patches = [(self.img_size//patch)**2 for patch in self.patch_size]
+        self.projection_dim = [self.num_channels*(patch)**2 for patch in self.patch_size]
         self.hidden_dim_factor = hidden_dim_factor
         self.num_heads = num_heads
         self.attn_drop = attn_drop
         self.proj_drop = proj_drop
+        self.linear_list = linear_list
         self.linear_drop = linear_drop
         self.device = device
         # Layers
-        self.PE = PatchEncoder(self.depth,self.num_patches,self.patch_size,self.num_channels,self.preprocessing,self.dtype)
+        self.PE = PatchEncoder(self.img_size,self.patch_size,self.num_channels)
         self.Encoders = torch.nn.ModuleList()
-        for level in range(self.depth):
-            exp_factor = 4**(level)
-            exp_factor_hidden = 2**(level)
-            for _ in range(depth_te):
-                self.Encoders.append(
-                    ReAttentionTransformerEncoder(self.num_patches*exp_factor,
-                                                  self.num_channels,
-                                                  self.projection_dim//exp_factor,
-                                                  self.hidden_dim//exp_factor_hidden,
-                                                  self.num_heads,
-                                                  self.attn_drop,
-                                                  self.proj_drop,
-                                                  self.linear_drop,
-                                                  self.dtype,
-                                                  )
-                )
-        
+        for i in range(len(self.patch_size)):
+            self.Encoders.append(ReAttentionTransformerBlock(self.img_size,
+                                                             self.patch_size[i],
+                                                             self.num_channels,
+                                                             self.hidden_dim_factor,
+                                                             self.num_heads,
+                                                             self.attn_drop,
+                                                             self.proj_drop,
+                                                             self.linear_drop,
+                                                             self.transformer_blocks[i],
+                                                             self.device,
+                                                             )
+                                )
+
         # Output
         self.Tube = torch.nn.ModuleList()
         self.linear_list = [self.num_channels*self.num_patches*self.patch_size**2] + self.linear_list
@@ -287,8 +300,8 @@ class ViT_model(torch.nn.Module):
         # Encoders
         for i, enc in enumerate(self.Encoders):
             X_patch = enc(X_patch)
-            if (i+1)%self.depth_te==0:
-                X_patch = downsampling(X_patch, self.num_channels)
+            if i<len(self.Encoders):
+                X_patch = resampling(X_patch, self.patch_size[i:i+1],self.num_channels)
         # Output
         X_flat = torch.flatten(X_patch, 1, -1)
         for _, tube in enumerate(self.Tube):
