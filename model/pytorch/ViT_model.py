@@ -69,7 +69,7 @@ class PatchEncoder(torch.nn.Module):
                              device = self.device,
                              )
             self.position_embedding = torch.nn.Embedding(num_embeddings=self.num_patches[1],
-                                                         embedding_dim = self.num_channels*self.patch_size[1]**2,
+                                                         embedding_dim = self.projection_dim[1],
                                                          device = self.device,
                                                          )
         else:
@@ -79,11 +79,11 @@ class PatchEncoder(torch.nn.Module):
                              device = self.device,
                              )
             self.position_embedding = torch.nn.Embedding(num_embeddings=self.num_patches[0],
-                                                         embedding_dim = self.num_channels*self.patch_size[0]**2,
+                                                         embedding_dim = self.projection_dim[0],
                                                          device = self.device,
                                                          )
         # Layers
-        self.linear = torch.nn.Linear(self.projection_dim[0], self.projection_dim[0])
+        self.linear = torch.nn.Linear(self.projection_dim[0], self.projection_dim[0], device = self.device)
 
 
     def forward(self, X):
