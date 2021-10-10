@@ -210,7 +210,7 @@ class ReAttentionTransformerBlock(torch.nn.Module):
         self.LN1 = torch.nn.ModuleList()
         self.LN2 = torch.nn.ModuleList()
         self.FF = torch.nn.ModuleList()
-        for _ in range(self.transformer_layers):
+        for _ in range(self.transformer_blocks):
             self.ReAttn.append(ReAttention(self.projection_dim,
                                            num_channels = self.num_channels,
                                            num_heads = self.num_heads,
