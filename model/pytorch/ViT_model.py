@@ -305,8 +305,8 @@ class ViT_model(torch.nn.Module):
         # Encoders
         for i, enc in enumerate(self.Encoders):
             X_patch = enc(X_patch)
-            if i<len(self.Encoders)-1:
-                X_patch = resampling(X_patch, self.patch_size[i:i+1],self.num_channels)
+            if i<len(self.transformer_blocks)-1:
+                X_patch = resampling(X_patch, self.patch_size[i:i+2],self.num_channels)
         # Output
         X_flat = torch.flatten(X_patch, 1, -1)
         for _, tube in enumerate(self.Tube):
