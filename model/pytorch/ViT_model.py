@@ -294,7 +294,7 @@ class ViT_model(torch.nn.Module):
         self.Tube = torch.nn.ModuleList()
         self.linear_list = [self.num_channels*self.num_patches[-1]*self.patch_size[-1]**2] + self.linear_list
         for i in range(len(self.linear_list)-1):
-            self.Tube.append(torch.nn.Linear(in_features=self.linear_list[i], out_features=self.linear_list[i+1], dtype = self.dtype, device = self.device))
+            self.Tube.append(torch.nn.Linear(in_features=self.linear_list[i], out_features=self.linear_list[i+1], device = self.device))
             self.Tube.append(torch.nn.Dropout(self.linear_drop))
 
     def forward(self,
