@@ -68,18 +68,23 @@ class PatchEncoder(torch.nn.Module):
                              step = 1,
                              device = self.device,
                              )
+            self.position_embedding = torch.nn.Embedding(num_embeddings=self.num_patches[1],
+                                                         embedding_dim = self.num_channels*self.patch_size[1]**2,
+                                                         device = self.device,
+                                                         )
         else:
             self.positions = torch.arange(start = 0,
                              end = self.num_patches[0],
                              step = 1,
                              device = self.device,
                              )
+            self.position_embedding = torch.nn.Embedding(num_embeddings=self.num_patches[0],
+                                                         embedding_dim = self.num_channels*self.patch_size[0]**2,
+                                                         device = self.device,
+                                                         )
         # Layers
         self.linear = torch.nn.Linear(self.projection_dim[0], self.projection_dim[0])
-        self.position_embedding = torch.nn.Embedding(num_embeddings=self.num_patches_final,
-                                                     embedding_dim = self.num_channels*self.patch_size_final**2,
-                                                     device = self.device,
-                                                     )
+
 
     def forward(self, X):
         if self.patch_size[0]>self.patch_size[1]:
