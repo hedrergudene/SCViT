@@ -1,6 +1,6 @@
 import tensorflow as tf
-from typing import List
 import numpy as np
+from typing import List
 
 # Auxiliary methods
 def patch(X:tf.Tensor,
@@ -77,7 +77,6 @@ class Patches(tf.keras.layers.Layer):
         patches = tf.reshape(patches, [batch_size, -1, patch_dims])
         return patches
 
-
 class DeepPatchEncoder(tf.keras.layers.Layer):
     def __init__(self,
                  img_size:int=128,
@@ -93,11 +92,11 @@ class DeepPatchEncoder(tf.keras.layers.Layer):
         self.dense = tf.keras.layers.Dense(self.projection_dim[0])
         if self.patch_size[0]>self.patch_size[1]:
             self.position_embedding = tf.keras.layers.Embedding(
-                input_dim=self.num_patches[1], output_dim=self.projection_dim[1]
+                input_dim=self.num_patches[1], output_dim=self.projection_dim[1],
             )
         else:
             self.position_embedding = tf.keras.layers.Embedding(
-                input_dim=self.num_patches[0], output_dim=self.projection_dim[0]
+                input_dim=self.num_patches[0], output_dim=self.projection_dim[0],
             )
 
     def call(self, X:tf.Tensor):
@@ -190,7 +189,6 @@ class ReAttention(tf.keras.layers.Layer):
                  qk_scale=None,
                  attn_drop=0.2,
                  proj_drop=0.2,
-                 expansion_ratio = 3,
                  apply_transform=True,
                  transform_scale=False,
                  ):
@@ -307,8 +305,6 @@ class ReAttentionTransformerEncoder(tf.keras.layers.Layer):
             encoded_patches = self.LN2[i](encoded_patches)
         return encoded_patches
 
-
-# Model
 class HViT(tf.keras.layers.Layer):
     def __init__(self,
                  img_size:int=128,
@@ -357,7 +353,7 @@ class HViT(tf.keras.layers.Layer):
 
     def call(self, X:tf.Tensor):
         # Patch
-        encoded_patches = DeepPatchEncoder(self.img_size, self.patch_size, self.num_channels)(X)
+        encoded_patches = self.DPE(X)
         # Transformer Block
         encoded_patches = self.TB1(encoded_patches)
         # Resampling
