@@ -234,7 +234,7 @@ class ReAttentionTransformerBlock(torch.nn.Module):
 
 
     def forward(self, encoded_patches):
-        for i in range(self.transformer_layers):
+        for i in range(self.transformer_blocks):
             encoded_patch_attn, _ = self.ReAttn[i](encoded_patches)
             encoded_patches = encoded_patch_attn + encoded_patches
             encoded_patches = self.LN1[i](encoded_patches)
