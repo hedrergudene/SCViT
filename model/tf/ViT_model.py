@@ -46,7 +46,7 @@ def unpatch(x, num_channels):
 
 def resampling(encoded_patches, num_patches:List[int]=[64,256], projection_dim:List[int]=[196,64], num_channels:int=1):
     new_patch_size = int(np.sqrt(projection_dim[1]))
-    original_image = unpatch(unflatten(encoded_patches, num_channels[1]), num_channels[1])
+    original_image = unpatch(unflatten(encoded_patches, num_channels), num_channels)
     new_patches = Patches(new_patch_size)(tf.squeeze(original_image, axis=1))
     new_patches_flattened = tf.reshape(new_patches, shape=[-1, num_patches[1], projection_dim[1]])
     return new_patches_flattened
