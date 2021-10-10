@@ -139,18 +139,21 @@ class Resampling(tf.keras.layers.Layer):
         if trainable:
             self.dropout = dropout
             self.Conv2D_pre = tf.keras.layers.Conv2D(self.num_patches[0], (3,3), strides=(1,1), padding='same')
-            self.down = tf.keras.layers.Conv2D(self.num_patches[1], (3,3), strides=(2,2), padding='same')
+            if self.patch_size[0]>self.patch_size[1]:
+                self.rs = tf.keras.layers.Conv2D(self.num_patches[1], (3,3), strides=(2,2), padding='same')
+            else:
+                self.rs = tf.keras.layers.Conv2DTranspose(self.num_patches[1], (3,3), strides=(2,2), padding='same')
             self.Conv2D_post = tf.keras.layers.Conv2D(self.num_patches[1], (3,3), strides=(1,1), padding='same')
 
     def call(self, encoded:tf.Tensor):
         if self.trainable:
             X_patch = unflatten(encoded, self.num_channels)
             X_patch = tf.transpose(X_patch, perm=[0,4,2,3,1])
-            X_patch = tf.map_fn(fn=lambda y: self.Conv2D_pre(y), elems = X_patch)
+            X_patch = tf.map_fn(fn=lambda y: tf.keras.activations.gelu(self.Conv2D_pre(y)), elems = X_patch)
             X_patch = tf.keras.layers.Dropout(self.dropout)(X_patch)
-            X_patch = tf.map_fn(fn=lambda y: self.down(y), elems = X_patch)
+            X_patch = tf.map_fn(fn=lambda y: tf.keras.activations.gelu(self.rs(y)), elems = X_patch)
             X_patch = tf.keras.layers.Dropout(self.dropout)(X_patch)
-            X_patch = tf.map_fn(fn=lambda y: self.Conv2D_post(y), elems = X_patch)
+            X_patch = tf.map_fn(fn=lambda y: tf.keras.activations.gelu(self.Conv2D_post(y)), elems = X_patch)
             X_patch = tf.keras.layers.Dropout(self.dropout)(X_patch)        
             X_patch = tf.transpose(X_patch, perm=[0,4,2,3,1])
             return tf.reshape(X_patch, [-1, self.num_patches[1], self.projection_dim[1]])
@@ -186,7 +189,7 @@ class ReAttention(tf.keras.layers.Layer):
                  num_patches,
                  num_channels=1,
                  num_heads=8,
-                 qkv_bias=False,
+                 qkv_bias=True,
                  qk_scale=None,
                  attn_drop=0.2,
                  proj_drop=0.2,
@@ -222,13 +225,13 @@ class ReAttention(tf.keras.layers.Layer):
     def create_queries(self, x, letter):
         if letter=='q':
             x = unflatten(x, self.num_channels)
-            x = tf.map_fn(fn=lambda y: self.qconv2d(y), elems=x)
+            x = tf.map_fn(fn=lambda y: tf.keras.activations.gelu(self.qconv2d(y)), elems=x)
         if letter == 'k':
             x = unflatten(x, self.num_channels)
-            x = tf.map_fn(fn=lambda y: self.kconv2d(y), elems=x)
+            x = tf.map_fn(fn=lambda y: tf.keras.activations.gelu(self.kconv2d(y)), elems=x)
         if letter == 'v':
             x = unflatten(x, self.num_channels)
-            x = tf.map_fn(fn=lambda y: self.vconv2d(y), elems=x)
+            x = tf.map_fn(fn=lambda y: tf.keras.activations.gelu(self.vconv2d(y)), elems=x)
 
         x = tf.reshape(x, shape=[-1, self.num_patches, self.dim])
         x = tf.reshape(x, shape = [-1, self.num_patches, self.num_heads, self.dim//self.num_heads, 1])
