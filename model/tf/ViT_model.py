@@ -372,7 +372,8 @@ class HViT(tf.keras.layers.Layer):
                  drop_attn:float=.2,
                  drop_rs:float=.2,
                  drop_linear:float=.4,
-                 trainable_rs:bool=True,
+                 trainable_rs:bool=False,
+                 original_attn:bool=False,
                  ):
         super(HViT, self).__init__()
         # Parameters
@@ -387,14 +388,19 @@ class HViT(tf.keras.layers.Layer):
         self.drop_rs = drop_rs
         self.drop_linear = drop_linear
         self.trainable_rs = trainable_rs
+        self.original_attn = original_attn
         self.num_patches = [(self.img_size//patch)**2 for patch in self.patch_size]
         self.projection_dim = [self.num_channels*patch**2 for patch in self.patch_size]
         self.hidden_units = [int(hidden_unit_factor*self.projection_dim[0]), int(hidden_unit_factor*self.projection_dim[1])]
         # Layers
         self.DPE = DeepPatchEncoder(self.img_size, self.patch_size, self.num_channels)
-        self.TB1 = AttentionTransformerEncoder(self.img_size,self.patch_size[0],self.num_channels,self.num_heads,self.transformer_layers[0], self.hidden_units[0],self.drop_attn)
+        if self.original_attn:
+            self.TB1 = AttentionTransformerEncoder(self.img_size,self.patch_size[0],self.num_channels,self.num_heads,self.transformer_layers[0], self.hidden_units[0],self.drop_attn)
+            self.TB2 = AttentionTransformerEncoder(self.img_size,self.patch_size[1],self.num_channels,self.num_heads,self.transformer_layers[1], self.hidden_units[1],self.drop_attn)
+        else:
+            self.TB1 = ReAttentionTransformerEncoder(self.img_size,self.patch_size[0],self.num_channels,self.num_heads,self.transformer_layers[0], self.hidden_units[0],self.drop_attn)
+            self.TB2 = ReAttentionTransformerEncoder(self.img_size,self.patch_size[1],self.num_channels,self.num_heads,self.transformer_layers[1], self.hidden_units[1],self.drop_attn)
         self.RS = Resampling(self.img_size,self.patch_size,self.num_channels,self.drop_rs, self.trainable_rs)
-        self.TB2 = AttentionTransformerEncoder(self.img_size,self.patch_size[1],self.num_channels,self.num_heads,self.transformer_layers[1], self.hidden_units[1],self.drop_attn)
         self.MLP = tf.keras.Sequential([tf.keras.layers.LayerNormalization(epsilon=1e-6),
                                         tf.keras.layers.Flatten(),
                                         tf.keras.layers.Dropout(self.drop_linear)])
