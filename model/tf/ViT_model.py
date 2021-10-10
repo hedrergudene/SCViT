@@ -175,6 +175,7 @@ class FeedForward(tf.keras.layers.Layer):
         x = tf.keras.activations.gelu(x)
         x = self.Drop1(x)
         x = self.D2(x)
+        x = tf.keras.activations.gelu(x)
         x = self.Drop2(x)
         return x
 
@@ -252,6 +253,59 @@ class ReAttention(tf.keras.layers.Layer):
 
 
 ## Transformer Encoder
+class AttentionTransformerEncoder(tf.keras.layers.Layer):
+    def __init__(self,
+                 img_size:int,
+                 patch_size:int,
+                 num_channels:int,
+                 num_heads:int,
+                 transformer_layers:int,
+                 hidden_dim:int,
+                 attn_drop:int,
+                 ):
+        super().__init__()
+        # Parameters
+        self.img_size = img_size
+        self.patch_size = patch_size
+        self.num_channels = num_channels
+        self.num_patches = (self.img_size//self.patch_size)**2
+        self.projection_dim = self.num_channels*self.patch_size**2
+        self.transformer_layers = transformer_layers
+        self.hidden_dim = hidden_dim
+        self.num_heads = num_heads
+        self.attn_drop = attn_drop
+        # Layers
+        self.LN1 = []
+        self.LN2 = []
+        self.Attn = []
+        self.FF = []
+        for _ in range(self.transformer_layers):
+            self.LN1.append(tf.keras.layers.LayerNormalization())
+            self.LN2.append(tf.keras.layers.LayerNormalization())
+            self.Attn.append(
+                tf.keras.layers.MultiHeadAttention(num_heads=self.num_heads,
+                                                   key_dim=self.projection_dim,
+                                                   dropout=self.attn_drop,
+                                                  )
+            )
+            self.FF.append(
+                FeedForward(projection_dim = self.projection_dim,
+                                       hidden_dim = self.hidden_dim,
+                                       dropout = self.attn_drop,
+                                       )
+            )
+
+    def call(self, encoded_patches):
+        for i in range(self.transformer_layers):
+            encoded_patch_attn = self.Attn[i](encoded_patches, encoded_patches)
+            encoded_patches = tf.keras.layers.Add()([encoded_patch_attn, encoded_patches])
+            encoded_patches = self.LN1[i](encoded_patches)
+            encoded_patch_FF = self.FF[i](encoded_patches)
+            encoded_patches = tf.keras.layers.Add()([encoded_patch_FF, encoded_patches])
+            encoded_patches = self.LN2[i](encoded_patches)
+        return encoded_patches
+
+
 class ReAttentionTransformerEncoder(tf.keras.layers.Layer):
     def __init__(self,
                  img_size:int,
@@ -338,9 +392,9 @@ class HViT(tf.keras.layers.Layer):
         self.hidden_units = [int(hidden_unit_factor*self.projection_dim[0]), int(hidden_unit_factor*self.projection_dim[1])]
         # Layers
         self.DPE = DeepPatchEncoder(self.img_size, self.patch_size, self.num_channels)
-        self.TB1 = ReAttentionTransformerEncoder(self.img_size,self.patch_size[0],self.num_channels,self.num_heads,self.transformer_layers[0], self.hidden_units[0],self.drop_attn)
+        self.TB1 = AttentionTransformerEncoder(self.img_size,self.patch_size[0],self.num_channels,self.num_heads,self.transformer_layers[0], self.hidden_units[0],self.drop_attn)
         self.RS = Resampling(self.img_size,self.patch_size,self.num_channels,self.drop_rs, self.trainable_rs)
-        self.TB2 = ReAttentionTransformerEncoder(self.img_size,self.patch_size[1],self.num_channels,self.num_heads,self.transformer_layers[1], self.hidden_units[1],self.drop_attn)
+        self.TB2 = AttentionTransformerEncoder(self.img_size,self.patch_size[1],self.num_channels,self.num_heads,self.transformer_layers[1], self.hidden_units[1],self.drop_attn)
         self.MLP = tf.keras.Sequential([tf.keras.layers.LayerNormalization(epsilon=1e-6),
                                         tf.keras.layers.Flatten(),
                                         tf.keras.layers.Dropout(self.drop_linear)])
