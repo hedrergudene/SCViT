@@ -96,9 +96,9 @@ class DeepPatchEncoder(tf.keras.layers.Layer):
             input_dim=self.num_patches[0], output_dim=self.projection_dim[0],
         )
         if self.patch_size[0]>self.patch_size[1]:
-            self.position_embedding_2 = tf.keras.layers.Conv2D(num_patches[1], kernel_size = (3,3), strides = (2,2), padding='same')
+            self.position_embedding_2 = tf.keras.layers.Conv2D(self.num_patches[1], kernel_size = (3,3), strides = (2,2), padding='same')
         else:
-            self.position_embedding_2 = tf.keras.layers.Conv2DTranspose(num_patches[1], kernel_size = (3,3), strides = (2,2), padding='same')
+            self.position_embedding_2 = tf.keras.layers.Conv2DTranspose(self.num_patches[1], kernel_size = (3,3), strides = (2,2), padding='same')
 
     def call(self, X:tf.Tensor):
         # Flat patches
