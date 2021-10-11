@@ -49,35 +49,33 @@ def unpatch(x, num_channels):
 def resampling(encoded_patches, num_patches:List[int]=[64,256], projection_dim:List[int]=[196,64], num_channels:int=1):
     new_patch_size = int(np.sqrt(projection_dim[1]))
     original_image = unpatch(unflatten(encoded_patches, num_channels), num_channels)
-    new_patches = Patches(new_patch_size)(tf.squeeze(original_image, axis=1))
+    new_patches = patches(tf.squeeze(original_image, axis=1), new_patch_size)
     new_patches_flattened = tf.reshape(new_patches, shape=[-1, num_patches[1], projection_dim[1]])
     return new_patches_flattened
 
 # Layers
-class Patches(tf.keras.layers.Layer):
-    def __init__(self, patch_size):
-        super(Patches, self).__init__()
+class PatchEncoder(tf.keras.layers.Layer):
+    def __init__(self,
+                 img_size:int=128,
+                 patch_size:int=16,
+                 num_channels:int=1,
+                 ):
+        super(PatchEncoder, self).__init__()
+        self.img_size = img_size
         self.patch_size = patch_size
-
-    def get_config(self):
-        config = super().get_config().copy()
-        config.update({
-            'patch_size': self.patch_size,
-        })
-        return config
-
-    def call(self, images):
-        batch_size = tf.shape(images)[0]
-        patches = tf.image.extract_patches(
-            images=images,
-            sizes=[1, self.patch_size, self.patch_size, 1],
-            strides=[1, self.patch_size, self.patch_size, 1],
-            rates=[1, 1, 1, 1],
-            padding="VALID",
+        self.num_channels = num_channels
+        self.num_patches = (self.img_size//self.patch_size)**2
+        self.projection_dim = self.num_channels*self.patch_size**2
+        self.projection = tf.keras.layers.Dense(units=self.projection_dim)
+        self.position_embedding = tf.keras.layers.Embedding(
+            input_dim=self.num_patches, output_dim=self.projection_dim
         )
-        patch_dims = patches.shape[-1]
-        patches = tf.reshape(patches, [batch_size, -1, patch_dims])
-        return patches
+
+    def call(self, X:tf.Tensor):
+        X = patches(X, self.patch_size)
+        positions = tf.range(start=0, limit=self.num_patches, delta=1)
+        encoded = self.projection(X) + self.position_embedding(positions)
+        return encoded
 
 class DeepPatchEncoder(tf.keras.layers.Layer):
     def __init__(self,
@@ -375,6 +373,63 @@ class ReAttentionTransformerEncoder(tf.keras.layers.Layer):
             encoded_patches = self.LN2[i](encoded_patches)
         return encoded_patches
 
+
+# Models
+## Original ViT
+class ViT(tf.keras.layers.Layer):
+    def __init__(self,
+                 img_size:int=128,
+                 patch_size:int=16,
+                 num_channels:int=1,
+                 num_heads:int=8,
+                 transformer_layers:int=8,
+                 hidden_unit_factor:float=2.,
+                 mlp_head_units:List[int]=[2048,1024],
+                 num_classes:int=4,
+                 drop_attn:float=.2,
+                 drop_linear:float=.4,
+                 original_attn:bool=False,
+                 ):
+        super(HViT, self).__init__()
+        # Parameters
+        self.img_size = img_size
+        self.patch_size = patch_size
+        self.num_channels = num_channels
+        self.num_heads = num_heads
+        self.transformer_layers = transformer_layers
+        self.mlp_head_units = mlp_head_units
+        self.num_classes = num_classes
+        self.drop_attn = drop_attn
+        self.drop_linear = drop_linear
+        self.original_attn = original_attn
+        self.num_patches = (self.img_size//self.patch_size)**2
+        self.projection_dim = self.num_channels*self.patch_size**2
+        self.hidden_units = int(hidden_unit_factor*self.projection_dim)
+        # Layers
+        self.PE = PatchEncoder(self.img_size, self.patch_size, self.num_channels)
+        if self.original_attn:
+            self.TB = AttentionTransformerEncoder(self.img_size,self.patch_size,self.num_channels,self.num_heads,self.transformer_layers, self.hidden_units,self.drop_attn)
+        else:
+            self.TB = ReAttentionTransformerEncoder(self.img_size,self.patch_size,self.num_channels,self.num_heads,self.transformer_layers, self.hidden_units, self.drop_attn)
+        self.MLP = tf.keras.Sequential([tf.keras.layers.LayerNormalization(epsilon=1e-6),
+                                        tf.keras.layers.Flatten(),
+                                        tf.keras.layers.Dropout(self.drop_linear)])
+        for i in self.mlp_head_units:
+            self.MLP.add(tf.keras.layers.Dense(i))
+            self.MLP.add(tf.keras.layers.Dropout(self.drop_linear))
+        self.MLP.add(tf.keras.layers.Dense(self.num_classes))
+
+    def call(self, X:tf.Tensor):
+        # Patch
+        encoded_patches = self.PE(X)
+        # Transformer Block
+        encoded_patches = self.TB(encoded_patches)
+        # Classify outputs
+        logits = self.MLP(encoded_patches)
+        return logits
+
+
+## HViT
 class HViT(tf.keras.layers.Layer):
     def __init__(self,
                  img_size:int=128,
@@ -424,8 +479,6 @@ class HViT(tf.keras.layers.Layer):
             self.MLP.add(tf.keras.layers.Dense(i))
             self.MLP.add(tf.keras.layers.Dropout(self.drop_linear))
         self.MLP.add(tf.keras.layers.Dense(self.num_classes))
-
-
 
     def call(self, X:tf.Tensor):
         # Patch
