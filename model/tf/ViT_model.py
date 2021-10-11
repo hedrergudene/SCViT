@@ -3,7 +3,7 @@ import numpy as np
 from typing import List
 
 # Auxiliary methods
-def patch(X:tf.Tensor,
+def patches(X:tf.Tensor,
           patch_size:int,
           ):
 
@@ -115,7 +115,7 @@ class DeepPatchEncoder(tf.keras.layers.Layer):
 
     def call(self, X:tf.Tensor):
         # Flat patches
-        patch = Patches(self.patch_size[1])(X)
+        patch = patches(X,self.patch_size[1])
         flat = tf.reshape(patch, [-1, self.num_patches[1], self.projection_dim[1]])
         # Embedding 1
         positions = tf.range(start=0, limit=self.num_patches[0], delta=1)
@@ -128,7 +128,7 @@ class DeepPatchEncoder(tf.keras.layers.Layer):
         pos_enc_2 = tf.reshape(pos_enc_2, [-1,self.num_patches[-1], self.projection_dim[-1]])
         # Encoded
         encoded = flat + pos_enc_2
-        encoded = tf.reshape(Patches(self.patch_size[0])(tf.squeeze(unpatch(unflatten(encoded, 1), 1), axis = 1)), [-1,self.num_patches[0], self.projection_dim[0]])
+        encoded = tf.reshape(patches(tf.squeeze(unpatch(unflatten(encoded, 1), 1), axis = 1), self.patch_size[0]), [-1,self.num_patches[0], self.projection_dim[0]])
         encoded = encoded + pos_enc_1
         encoded = self.dense(encoded)
         return encoded
