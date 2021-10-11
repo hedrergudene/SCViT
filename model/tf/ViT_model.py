@@ -124,7 +124,7 @@ class Resampling(tf.keras.layers.Layer):
                  img_size:int=128,
                  patch_size:List[int]=[16,8],
                  num_channels:int=1,
-                 dropout=.2,
+                 dropout:float=0.,
                  trainable:bool=True,
                  ):
         super(Resampling, self).__init__()
@@ -137,24 +137,22 @@ class Resampling(tf.keras.layers.Layer):
         self.trainable = trainable
         # Layers
         if trainable:
-            self.dropout = dropout
-            self.Conv2D_pre = tf.keras.layers.Conv2D(self.num_patches[0], (3,3), strides=(1,1), padding='same')
+            self.BN = tf.keras.layers.BatchNorm()
+            self.LeakyReLU = tf.keras.layers.LeakyReLU()
+            self.drop = tf.keras.layers.Dropout(dropout)
             if self.patch_size[0]>self.patch_size[1]:
-                self.rs = tf.keras.layers.Conv2D(self.num_patches[1], (3,3), strides=(2,2), padding='same')
+                self.rs = tf.keras.layers.Conv2D(self.num_patches[1], (3,3), strides=(2,2), padding='same', kernel_initializer=tf.random_normal_initializer(0., 0.02), use_bias=False)
             else:
-                self.rs = tf.keras.layers.Conv2DTranspose(self.num_patches[1], (3,3), strides=(2,2), padding='same')
-            self.Conv2D_post = tf.keras.layers.Conv2D(self.num_patches[1], (3,3), strides=(1,1), padding='same')
+                self.rs = tf.keras.layers.Conv2DTranspose(self.num_patches[1], (3,3), strides=(2,2), padding='same', kernel_initializer=tf.random_normal_initializer(0., 0.02), use_bias=False)
 
     def call(self, encoded:tf.Tensor):
         if self.trainable:
             X_patch = unflatten(encoded, self.num_channels)
             X_patch = tf.transpose(X_patch, perm=[0,4,2,3,1])
-            X_patch = tf.map_fn(fn=lambda y: tf.keras.activations.gelu(self.Conv2D_pre(y)), elems = X_patch)
-            X_patch = tf.keras.layers.Dropout(self.dropout)(X_patch)
-            X_patch = tf.map_fn(fn=lambda y: tf.keras.activations.gelu(self.rs(y)), elems = X_patch)
-            X_patch = tf.keras.layers.Dropout(self.dropout)(X_patch)
-            X_patch = tf.map_fn(fn=lambda y: tf.keras.activations.gelu(self.Conv2D_post(y)), elems = X_patch)
-            X_patch = tf.keras.layers.Dropout(self.dropout)(X_patch)        
+            X_patch = tf.map_fn(fn=lambda y: self.rs(y), elems = X_patch)
+            X_patch = self.BN(X_patch)
+            X_patch = self.drop(X_patch)
+            X_patch = self.LeakyReLU(X_patch)
             X_patch = tf.transpose(X_patch, perm=[0,4,2,3,1])
             return tf.reshape(X_patch, [-1, self.num_patches[1], self.projection_dim[1]])
         else:
@@ -189,7 +187,7 @@ class ReAttention(tf.keras.layers.Layer):
                  num_patches,
                  num_channels=1,
                  num_heads=8,
-                 qkv_bias=True,
+                 qkv_bias=False,
                  qk_scale=None,
                  attn_drop=0.2,
                  proj_drop=0.2,
@@ -209,14 +207,14 @@ class ReAttention(tf.keras.layers.Layer):
         if apply_transform:
             self.reatten_matrix = tf.keras.layers.Conv2D(self.num_patches, 1)
             self.var_norm = tf.keras.layers.BatchNormalization()
-            self.qconv2d = tf.keras.layers.Conv2D(self.num_channels,3,padding = 'same', use_bias=qkv_bias)
-            self.kconv2d = tf.keras.layers.Conv2D(self.num_channels,3,padding = 'same', use_bias=qkv_bias)
-            self.vconv2d = tf.keras.layers.Conv2D(self.num_channels,3,padding = 'same', use_bias=qkv_bias)
+            self.qconv2d = tf.keras.layers.Conv2D(self.num_channels,3,padding = 'same', kernel_initializer = tf.random_normal_initializer(0., 0.02), use_bias=qkv_bias)
+            self.kconv2d = tf.keras.layers.Conv2D(self.num_channels,3,padding = 'same', kernel_initializer = tf.random_normal_initializer(0., 0.02), use_bias=qkv_bias)
+            self.vconv2d = tf.keras.layers.Conv2D(self.num_channels,3,padding = 'same', kernel_initializer = tf.random_normal_initializer(0., 0.02), use_bias=qkv_bias)
             self.reatten_scale = self.scale if transform_scale else 1.0
         else:
-            self.qconv2d = tf.keras.layers.Conv2D(self.num_channels,3,padding = 'same', use_bias=qkv_bias)
-            self.kconv2d = tf.keras.layers.Conv2D(self.num_channels,3,padding = 'same', use_bias=qkv_bias)
-            self.vconv2d = tf.keras.layers.Conv2D(self.num_channels,3,padding = 'same', use_bias=qkv_bias)
+            self.qconv2d = tf.keras.layers.Conv2D(self.num_channels,3,padding = 'same', kernel_initializer = tf.random_normal_initializer(0., 0.02), use_bias=qkv_bias)
+            self.kconv2d = tf.keras.layers.Conv2D(self.num_channels,3,padding = 'same', kernel_initializer = tf.random_normal_initializer(0., 0.02), use_bias=qkv_bias)
+            self.vconv2d = tf.keras.layers.Conv2D(self.num_channels,3,padding = 'same', kernel_initializer = tf.random_normal_initializer(0., 0.02), use_bias=qkv_bias)
         
         self.attn_drop = tf.keras.layers.Dropout(attn_drop)
         self.proj = tf.keras.layers.Dense(dim)
