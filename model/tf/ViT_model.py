@@ -84,21 +84,34 @@ class DeepPatchEncoder(tf.keras.layers.Layer):
                  img_size:int=128,
                  patch_size:List[int]=[16,8],
                  num_channels:int=1,
+                 dropout:float=.2,
                  ):
         super(DeepPatchEncoder, self).__init__()
+        # Parameters
         self.img_size = img_size
         self.patch_size = patch_size
         self.num_channels = num_channels
         self.num_patches = [(self.img_size//patch)**2 for patch in self.patch_size]
         self.projection_dim = [self.num_channels*patch**2 for patch in self.patch_size]
+        # Layers
         self.dense = tf.keras.layers.Dense(self.projection_dim[0])
         self.position_embedding = tf.keras.layers.Embedding(
             input_dim=self.num_patches[0], output_dim=self.projection_dim[0],
         )
         if self.patch_size[0]>self.patch_size[1]:
-            self.position_embedding_2 = tf.keras.layers.Conv2D(self.num_patches[1], kernel_size = (3,3), strides = (2,2), padding='same')
+            self.position_embedding_2 = tf.keras.Sequential([
+                      tf.keras.layers.Conv2D(self.num_patches[1], kernel_size = (3,3), strides = (2,2), padding='same'),
+                      tf.keras.layers.BatchNormalization(),
+                      tf.keras.layers.dropout(dropout),
+                      tf.keras.layers.LeakyReLU(),
+            ])
         else:
-            self.position_embedding_2 = tf.keras.layers.Conv2DTranspose(self.num_patches[1], kernel_size = (3,3), strides = (2,2), padding='same')
+            self.position_embedding_2 = tf.keras.Sequential([
+                      tf.keras.layers.Conv2DTranspose(self.num_patches[1], kernel_size = (3,3), strides = (2,2), padding='same'),
+                      tf.keras.layers.BatchNormalization(),
+                      tf.keras.layers.dropout(dropout),
+                      tf.keras.layers.LeakyReLU(),
+            ])
 
     def call(self, X:tf.Tensor):
         # Flat patches
