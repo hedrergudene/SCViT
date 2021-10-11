@@ -27,8 +27,10 @@ def patch(X:tf.Tensor,
     return patches_tf
 
 def unflatten(flattened, num_channels):
-    # Alberto: Added to reconstruct from bs, n, projection_dim -> bs, n, c, h, w
-    _, n, p = flattened.shape.as_list()
+    if len(flattened.shape)==2:
+        n, p = flattened.shape.as_list()
+    else:
+        _, n, p = flattened.shape.as_list()
     unflattened = tf.reshape(flattened, (-1, n, int(np.sqrt(p//num_channels)), int(np.sqrt(p//num_channels)), num_channels))
     return unflattened
 
@@ -90,33 +92,33 @@ class DeepPatchEncoder(tf.keras.layers.Layer):
         self.num_patches = [(self.img_size//patch)**2 for patch in self.patch_size]
         self.projection_dim = [self.num_channels*patch**2 for patch in self.patch_size]
         self.dense = tf.keras.layers.Dense(self.projection_dim[0])
+        self.position_embedding = tf.keras.layers.Embedding(
+            input_dim=self.num_patches[0], output_dim=self.projection_dim[0],
+        )
         if self.patch_size[0]>self.patch_size[1]:
-            self.position_embedding = tf.keras.layers.Embedding(
-                input_dim=self.num_patches[1], output_dim=self.projection_dim[1],
-            )
+            self.position_embedding_2 = tf.keras.layers.Conv2D(num_patches[1], kernel_size = (3,3), strides = (2,2), padding='same')
         else:
-            self.position_embedding = tf.keras.layers.Embedding(
-                input_dim=self.num_patches[0], output_dim=self.projection_dim[0],
-            )
+            self.position_embedding_2 = tf.keras.layers.Conv2DTranspose(num_patches[1], kernel_size = (3,3), strides = (2,2), padding='same')
 
     def call(self, X:tf.Tensor):
-        if self.patch_size[0]>self.patch_size[1]: # If it's downsampling
-            patch = Patches(self.patch_size[1])(X)
-            flat = tf.reshape(patch, [-1, self.num_patches[1], self.projection_dim[1]])
-            positions = tf.range(start=0, limit=self.num_patches[1], delta=1)
-            encoded = flat + self.position_embedding(positions)
-            restored = unpatch(unflatten(encoded, 1), 1)
-            restored = Patches(self.patch_size[0])(tf.squeeze(restored, axis = 1))
-            restored = tf.reshape(restored, [-1, self.num_patches[0], self.projection_dim[0]])
-            restored = self.dense(restored)
-            return restored
-        else: # If it's upsampling
-            patch = Patches(self.patch_size[0])(X)
-            flat = tf.reshape(patch, [-1, self.num_patches[0], self.projection_dim[0]])
-            positions = tf.range(start=0, limit=self.num_patches[0], delta=1)
-            encoded = flat + self.position_embedding(positions)
-            restored = self.dense(encoded)
-            return restored
+        # Flat patches
+        patch = Patches(self.patch_size[1])(X)
+        flat = tf.reshape(patch, [-1, self.num_patches[1], self.projection_dim[1]])
+        # Embedding 1
+        positions = tf.range(start=0, limit=self.num_patches[0], delta=1)
+        pos_enc_1 = self.position_embedding(positions)
+        # Embedding 2
+        pos_enc_2 = unflatten(pos_enc_1, self.num_channels)
+        pos_enc_2 = tf.transpose(pos_enc_2, [0,4,2,3,1])
+        pos_enc_2 = tf.map_fn(lambda y: self.position_embedding_2(y), elems = pos_enc_2)
+        pos_enc_2 = tf.transpose(pos_enc_2, [0,4,2,3,1])
+        pos_enc_2 = tf.reshape(pos_enc_2, [-1,self.num_patches[-1], self.projection_dim[-1]])
+        # Encoded
+        encoded = flat + pos_enc_2
+        encoded = tf.reshape(Patches(self.patch_size[0])(tf.squeeze(unpatch(unflatten(encoded, 1), 1), axis = 1)), [-1,self.num_patches[0], self.projection_dim[0]])
+        encoded = encoded + pos_enc_1
+        encoded = self.dense(encoded)
+        return encoded
 
 
 class Resampling(tf.keras.layers.Layer):
