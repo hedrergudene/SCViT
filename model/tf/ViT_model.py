@@ -137,7 +137,7 @@ class Resampling(tf.keras.layers.Layer):
         self.trainable = trainable
         # Layers
         if trainable:
-            self.BN = tf.keras.layers.BatchNorm()
+            self.BN = tf.keras.layers.BatchNormalization()
             self.LeakyReLU = tf.keras.layers.LeakyReLU()
             self.drop = tf.keras.layers.Dropout(dropout)
             if self.patch_size[0]>self.patch_size[1]:
