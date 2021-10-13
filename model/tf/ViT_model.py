@@ -132,6 +132,45 @@ class DeepPatchEncoder(tf.keras.layers.Layer):
         return encoded
 
 
+class DeepPatchEncoder_CNN(tf.keras.layers.Layer):
+    def __init__(self,
+                 img_size:int=128,
+                 patch_size:List[int]=[16,8],
+                 num_channels:int=1,
+                 dropout:float=.2,
+                 bias:bool=False,
+                 ):
+        super(DeepPatchEncoder_CNN, self).__init__()
+        # Parameters
+        self.img_size = img_size
+        self.patch_size = patch_size
+        self.num_channels = num_channels
+        self.bias = bias
+        self.num_patches = [(self.img_size//patch)**2 for patch in self.patch_size]
+        self.projection_dim = [self.num_channels*patch**2 for patch in self.patch_size]
+        self.kernel_size = [patch//2 for patch in self.patch_size]
+        self.patch_size_extended = [self.img_size] + self.patch_size
+        # Layers
+        self.seq = tf.keras.Sequential([])
+        if self.patch_size[0]>self.patch_size[-1]:
+            self.strides_size = [self.patch_size_extended[i]//self.patch_size_extended[i+1] for i in range(len(self.patch_size))]
+            for i in range(len(self.patch_size)):
+                self.seq.add(tf.keras.layers.Conv2D(self.num_patches[i], kernel_size=self.kernel_size[i], strides=self.strides_size[i], padding='same', use_bias=self.bias))
+                self.seq.add(tf.keras.layers.BatchNormalization())
+        else:
+            self.strides_size = [self.patch_size_extended[i+1]//self.patch_size_extended[i] for i in range(len(self.patch_size))]
+            for i in range(len(self.patch_size)):
+                self.seq.add(tf.keras.layers.Conv2DTranspose(self.num_patches[i], kernel_size=self.kernel_size[i], strides=self.strides_size[i], padding='same', use_bias=self.bias))
+                self.seq.add(tf.keras.layers.BatchNormalization())
+
+    def call(self, X:tf.Tensor):
+        X = tf.transpose(tf.expand_dims(X, axis=1), perm=[0,4,2,3,1])
+        X = self.seq(X)
+        X = tf.reshape(tf.transpose(X, perm=[0,4,2,3,1]), shape=[-1, self.num_patches[-1], self.projection_dim[-1]])
+        X = resampling(X, [self.num_patches[-1], self.num_patches[0]], [self.projection_dim[-1],self.projection_dim[0]])
+        return X
+
+
 class Resampling(tf.keras.layers.Layer):
     def __init__(self,
                  img_size:int=128,
@@ -443,10 +482,13 @@ class HViT(tf.keras.layers.Layer):
                  drop_attn:float=.2,
                  drop_rs:float=.2,
                  drop_linear:float=.4,
+                 pos_enc_type:str='linear',
                  trainable_rs:bool=False,
                  original_attn:bool=False,
                  ):
         super(HViT, self).__init__()
+        # Validations
+        assert pos_enc_type in ['linear','conv'], f"Positional encoding must either be 'linear' or 'conv'."
         # Parameters
         self.img_size = img_size
         self.patch_size = patch_size
@@ -458,19 +500,25 @@ class HViT(tf.keras.layers.Layer):
         self.drop_attn = drop_attn
         self.drop_rs = drop_rs
         self.drop_linear = drop_linear
+        self.pos_enc_type = pos_enc_type
         self.trainable_rs = trainable_rs
         self.original_attn = original_attn
         self.num_patches = [(self.img_size//patch)**2 for patch in self.patch_size]
         self.projection_dim = [self.num_channels*patch**2 for patch in self.patch_size]
         self.hidden_units = [int(hidden_unit_factor*self.projection_dim[0]), int(hidden_unit_factor*self.projection_dim[1])]
         # Layers
-        self.DPE = DeepPatchEncoder(self.img_size, self.patch_size, self.num_channels)
+        if self.pos_enc_type=='linear':
+            self.DPE = DeepPatchEncoder(self.img_size, self.patch_size, self.num_channels)
+        elif self.pos_enc_type=='conv':
+            self.DPE = DeepPatchEncoder_CNN(self.img_size, self.patch_size, self.num_channels)
+                    
         if self.original_attn:
             self.TB1 = AttentionTransformerEncoder(self.img_size,self.patch_size[0],self.num_channels,self.num_heads,self.transformer_layers[0], self.hidden_units[0],self.drop_attn)
             self.TB2 = AttentionTransformerEncoder(self.img_size,self.patch_size[1],self.num_channels,self.num_heads,self.transformer_layers[1], self.hidden_units[1],self.drop_attn)
         else:
             self.TB1 = ReAttentionTransformerEncoder(self.img_size,self.patch_size[0],self.num_channels,self.num_heads,self.transformer_layers[0], self.hidden_units[0],self.drop_attn)
             self.TB2 = ReAttentionTransformerEncoder(self.img_size,self.patch_size[1],self.num_channels,self.num_heads,self.transformer_layers[1], self.hidden_units[1],self.drop_attn)
+          
         self.RS = Resampling(self.img_size,self.patch_size,self.num_channels,self.drop_rs, self.trainable_rs)
         self.MLP = tf.keras.Sequential([tf.keras.layers.LayerNormalization(epsilon=1e-6),
                                         tf.keras.layers.Flatten(),
