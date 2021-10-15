@@ -185,7 +185,7 @@ class DeepPatchEncoder(tf.keras.layers.Layer):
         encoded = unflatten(encoded, self.num_channels)
         encoded = tf.transpose(encoded, [0,4,2,3,1])
         positions = tf.expand_dims(positions, axis = 0)
-        positions = unflatten(positions, num_channels)
+        positions = unflatten(positions, self.num_channels)
         positions = tf.transpose(positions, [0,4,2,3,1])
         for i, resample in enumerate(self.seqCNN):
             # Generate next level positional encoding
