@@ -19,7 +19,7 @@ class ViT(tf.keras.layers.Layer):
                  drop_linear:float=.4,
                  original_attn:bool=False,
                  ):
-        super(HViT, self).__init__()
+        super(ViT, self).__init__()
         # Parameters
         self.img_size = img_size
         self.patch_size = patch_size
