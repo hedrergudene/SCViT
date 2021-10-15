@@ -138,7 +138,7 @@ class DeepPatchEncoder(tf.keras.layers.Layer):
         self.dense = tf.keras.layers.Dense(self.projection_dim[0])
         self.positions = []
         self.position_embedding = []
-        for i in range(len(self.patch_size)):
+        for i in range(len(self.patch_size)-1):
             self.positions.append(tf.range(start=0, limit=self.num_patches[i], delta=1))
             self.position_embedding.append(tf.keras.layers.Embedding(
             input_dim=self.num_patches[i], output_dim=self.projection_dim[i],
