@@ -19,7 +19,6 @@ def run_WB_experiment(WB_KEY:str,
                       WB_ENTITY:str,
                       WB_PROJECT:str,
                       WB_GROUP:str,
-                      WB_JOB_TYPE:str,
                       model:tf.keras.Model,
                       ImageDataGenerator_config:Dict,
                       flow_from_dataframe_config:Dict,
@@ -38,7 +37,8 @@ def run_WB_experiment(WB_KEY:str,
     # Gather data
     df = get_df(path)
     kf = KFold(n_splits = folds, shuffle = True, random_state = seed)
-    
+    # Log in WB
+    wandb.login(key=WB_KEY)
     # Start X-validation
     for train_idx, val_idx in kf.split(df):
         # Generators
@@ -52,8 +52,7 @@ def run_WB_experiment(WB_KEY:str,
         train_steps_per_epoch = len(train_generator)
         val_steps_per_epoch = len(val_generator)
         # Credentials
-        wandb.login(key=WB_KEY)
-        wandb.init(project=WB_PROJECT, entity=WB_ENTITY, group = WB_GROUP, job_type = WB_JOB_TYPE)
+        wandb.init(project=WB_PROJECT, entity=WB_ENTITY, group = WB_GROUP)
         # Model compile
         optimizer = tfa.optimizers.AdamW(
             learning_rate=learning_rate, weight_decay=weight_decay
