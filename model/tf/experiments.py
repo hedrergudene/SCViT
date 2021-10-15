@@ -36,8 +36,8 @@ def run_WB_experiment(WB_KEY:str,
 
     # Gather data
     df = get_df(path)
-    train_idx, test_idx, _, _ = train_test_split(df['x_col'], df['y_col'], test_size = pct_split[-1], stratify = df['y_col'], random_state = seed)
-    train_idx, val_idx, _, _ = train_test_split(df.loc[train_idx,'x_col'], df.loc[train_idx,'y_col'], test_size = pct_split[-2], stratify = df.loc[train_idx,'y_col'], random_state = seed)
+    train_idx, test_idx, _, _ = train_test_split(list(df.index), df['y_col'], test_size = pct_split[-1], stratify = df['y_col'], random_state = seed)
+    train_idx, val_idx, _, _ = train_test_split(train_idx, df.iloc[train_idx,-1], test_size = pct_split[-2], stratify = df.iloc[train_idx,-1], random_state = seed)
     # Log in WB
     wandb.login(key=WB_KEY)
     # Generators
