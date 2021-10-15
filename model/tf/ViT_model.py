@@ -62,8 +62,8 @@ class ViT(tf.keras.layers.Layer):
 class HViT(tf.keras.layers.Layer):
     def __init__(self,
                  img_size:int=128,
-                 patch_size:List[int]=[16,8,4],
-                 num_channels:int=3,
+                 patch_size:List[int]=[16,8],
+                 num_channels:int=1,
                  num_heads:int=8,
                  transformer_layers:List[int]=[5,5],
                  mlp_head_units:List[int]=[512,64],
@@ -102,13 +102,15 @@ class HViT(tf.keras.layers.Layer):
         self.Encoder = []
         self.Encoder_RS = []        
         if self.original_attn:
-            for i in range(len(self.patch_size)-1):
+            for i in range(len(self.patch_size)):
                 self.Encoder.append(AttentionTransformerEncoder(self.img_size,self.patch_size[i],self.num_channels,self.num_heads,self.transformer_layers[i], self.hidden_units[i],self.drop_attn,self.drop_proj))
-                self.Encoder_RS.append(Resampling(self.img_size, self.patch_size[i:i+2], self.num_channels, self.drop_rs, self.trainable_rs))
+                if (i+1)<len(self.patch_size):
+                    self.Encoder_RS.append(Resampling(self.img_size, self.patch_size[i:i+2], self.num_channels, self.drop_rs, self.trainable_rs))
         else:
-            for i in range(len(self.patch_size)-1):
+            for i in range(len(self.patch_size)):
                 self.Encoder.append(ReAttentionTransformerEncoder(self.img_size,self.patch_size[i],self.num_channels,self.num_heads,self.transformer_layers[i], self.hidden_units[i],self.drop_attn,self.drop_proj))
-                self.Encoder_RS.append(Resampling(self.img_size, self.patch_size[i:i+2], self.num_channels, self.drop_rs, self.trainable_rs))
+                if (i+1)<len(self.patch_size):
+                    self.Encoder_RS.append(Resampling(self.img_size, self.patch_size[i:i+2], self.num_channels, self.drop_rs, self.trainable_rs))
         ##MLP
         self.MLP = tf.keras.Sequential([tf.keras.layers.LayerNormalization(epsilon=1e-6),
                                         tf.keras.layers.Flatten(),
@@ -122,9 +124,10 @@ class HViT(tf.keras.layers.Layer):
         # Patch
         encoded = self.DPE(X)
         # Encoder
-        for i in range(len(self.patch_size)-1):
+        for i in range(len(self.patch_size)):
             encoded = self.Encoder[i](encoded)
-            encoded = self.Encoder_RS[i](encoded)
+            if (i+1)<len(self.patch_size):
+                encoded = self.Encoder_RS[i](encoded)
         # MLP
         logits = self.MLP(encoded)
         return logits
