@@ -64,6 +64,7 @@ class HViT(tf.keras.layers.Layer):
                  img_size:int=128,
                  patch_size:List[int]=[16,8],
                  num_channels:int=1,
+                 preprocessing:str='independent',
                  num_heads:int=8,
                  transformer_layers:List[int]=[5,5],
                  mlp_head_units:List[int]=[512,64],
@@ -82,6 +83,7 @@ class HViT(tf.keras.layers.Layer):
         self.patch_size = patch_size
         self.patch_size_rev = self.patch_size[-1::-1]
         self.num_channels = num_channels
+        self.preprocessing = preprocessing
         self.num_heads = num_heads
         self.transformer_layers = transformer_layers
         self.mlp_head_units = mlp_head_units
@@ -97,7 +99,10 @@ class HViT(tf.keras.layers.Layer):
         self.hidden_units = [int(hidden_unit_factor*proj) for proj in self.projection_dim]
         # Layers
         ##Positional Encoding
-        self.DPE = DeepPatchEncoder(self.img_size, self.patch_size, self.num_channels)
+        if self.preprocessing=="independent":
+            self.DPE = DeepPatchEncoder(self.img_size, self.patch_size, self.num_channels)
+        else:
+            self.DPE = DeepPatchEncoder_CNN(self.img_size, self.patch_size, self.num_channels)
         ##Encoder
         self.Encoder = []
         self.Encoder_RS = []        
