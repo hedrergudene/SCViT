@@ -10,7 +10,7 @@ def get_df(path:str):
     labels = os.listdir(path)
     df = pd.DataFrame({'x_col':[], 'y_col':[]})
     for label in labels:
-        group = ["/" + label + "/" + filename for filename in os.listdir(os.path.join(path,label))]
+        group = [path + "/" + label + "/" + filename for filename in os.listdir(os.path.join(path,label))]
         df = pd.concat([df, pd.DataFrame({'x_col':group, 'y_col':[label]*len(group)})], axis = 0)
     return df
 
