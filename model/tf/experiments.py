@@ -36,8 +36,8 @@ def run_WB_experiment(WB_KEY:str,
 
     # Gather data
     df = get_df(path)
-    train_idx, test_idx, _, _ = train_test_split(list(df.index), df['y_col'], test_size = pct_split[-1], stratify = df['y_col'], random_state = seed)
-    train_idx, val_idx, _, _ = train_test_split(train_idx, df.iloc[train_idx,-1], test_size = pct_split[-2], stratify = df.iloc[train_idx,-1], random_state = seed)
+    train_data, test_data, train_label, _ = train_test_split(df['x_col'], df['y_col'], test_size = pct_split[-1], random_state = seed)
+    train_data, val_data, train_label, _ = train_test_split(train_data, train_label, test_size = pct_split[-2], random_state = seed)
     # Log in WB
     wandb.login(key=WB_KEY)
     # Generators
@@ -49,9 +49,9 @@ def run_WB_experiment(WB_KEY:str,
                                                                     )
     val_datagen = tf.keras.preprocessing.image.ImageDataGenerator(rescale=ImageDataGenerator_config['val']['rescale'])
     test_datagen = tf.keras.preprocessing.image.ImageDataGenerator(rescale=ImageDataGenerator_config['test']['rescale'])
-    flow_from_dataframe_config['train']['dataframe'] = df.iloc[train_idx]
-    flow_from_dataframe_config['val']['dataframe'] = df.iloc[val_idx]
-    flow_from_dataframe_config['test']['dataframe'] = df.iloc[test_idx]
+    flow_from_dataframe_config['train']['dataframe'] = df.iloc[train_data.index]
+    flow_from_dataframe_config['val']['dataframe'] = df.iloc[val_data.index]
+    flow_from_dataframe_config['test']['dataframe'] = df.iloc[test_data.index]
     train_generator = train_datagen.flow_from_dataframe(dataframe=flow_from_dataframe_config['train']['dataframe'],
                                   x_col=flow_from_dataframe_config['train']['x_col'],
                                   y_col=flow_from_dataframe_config['train']['y_col'],
