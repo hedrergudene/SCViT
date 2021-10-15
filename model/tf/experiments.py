@@ -40,7 +40,7 @@ def run_WB_experiment(WB_KEY:str,
     # Log in WB
     wandb.login(key=WB_KEY)
     # Start X-validation
-    for train_idx, val_idx in kf.split(df):
+    for i, (train_idx, val_idx) in enumerate(kf.split(df)):
         # Generators
         train_datagen = tf.keras.preprocessing.image.ImageDataGenerator(rescale=ImageDataGenerator_config['train']['rescale'],
                                                                         shear_range=ImageDataGenerator_config['train']['shear_range'],
@@ -87,6 +87,10 @@ def run_WB_experiment(WB_KEY:str,
                 tf.keras.metrics.CategoricalAccuracy(name="accuracy"),
             ],
         )
+        if i==0:
+            model.save_weights('/tmp/model.h5')
+        else:
+            model.load_weights('/tmp/model.h5')
         # Callbacks
         reduceLR = tf.keras.callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.2, patience=5, min_lr=learning_rate//10)
         patience = tf.keras.callbacks.EarlyStopping(patience=2),
