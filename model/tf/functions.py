@@ -134,7 +134,7 @@ class DeepPatchEncoder(tf.keras.layers.Layer):
         self.num_channels = num_channels
         self.num_patches = [(self.img_size//patch)**2 for patch in self.patch_size]
         self.projection_dim = [self.num_channels*patch**2 for patch in self.patch_size]
-        self.kernel_size = [patch//4 if patch>2 else 2 for patch in self.patch_size]
+        self.kernel_size = [patch//2 for patch in self.patch_size]
         self.patch_size_extended = [self.img_size] + self.patch_size
         self.bias = bias
         # Layers
