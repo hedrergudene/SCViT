@@ -46,8 +46,24 @@ def run_WB_experiment(WB_KEY:str,
         val_datagen = tf.keras.preprocessing.image.ImageDataGenerator(ImageDataGenerator_config['val'])
         flow_from_dataframe_config['train']['dataframe'] = df.iloc[train_idx]
         flow_from_dataframe_config['val']['dataframe'] = df.iloc[val_idx]
-        train_generator = train_datagen.flow_from_dataframe(flow_from_dataframe_config['train'])
-        val_generator = val_datagen.flow_from_dataframe(flow_from_dataframe_config['val'])
+        train_generator = train_datagen.flow_from_dataframe(dataframe=flow_from_dataframe_config['train']['dataframe'],
+                                      x_col=flow_from_dataframe_config['train']['x_col'],
+                                      y_col=flow_from_dataframe_config['train']['y_col'],
+                                      target_size=flow_from_dataframe_config['train']['target_size'],
+                                      color_mode=flow_from_dataframe_config['train']['color_mode'],
+                                      class_mode=flow_from_dataframe_config['train']['class_mode'],
+                                      shuffle=flow_from_dataframe_config['train']['shuffle'],
+                                      seed=flow_from_dataframe_config['train']['seed'],
+                                      )
+        val_generator = val_datagen.flow_from_dataframe(dataframe=flow_from_dataframe_config['val']['dataframe'],
+                                      x_col=flow_from_dataframe_config['val']['x_col'],
+                                      y_col=flow_from_dataframe_config['val']['y_col'],
+                                      target_size=flow_from_dataframe_config['val']['target_size'],
+                                      color_mode=flow_from_dataframe_config['val']['color_mode'],
+                                      class_mode=flow_from_dataframe_config['val']['class_mode'],
+                                      shuffle=flow_from_dataframe_config['val']['shuffle'],
+                                      seed=flow_from_dataframe_config['val']['seed'],
+                                      )
         # Train & validation steps
         train_steps_per_epoch = len(train_generator)
         val_steps_per_epoch = len(val_generator)
@@ -57,7 +73,6 @@ def run_WB_experiment(WB_KEY:str,
         optimizer = tfa.optimizers.AdamW(
             learning_rate=learning_rate, weight_decay=weight_decay
         )
-
         model.compile(
             optimizer=optimizer,
             loss=tf.keras.losses.CategoricalCrossentropy(from_logits=True, label_smoothing = label_smoothing),
