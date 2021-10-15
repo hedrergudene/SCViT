@@ -209,7 +209,7 @@ class FeedForward(tf.keras.layers.Layer):
                  hidden_dim:int,
                  dropout:float,
                  ):
-        super().__init__()
+        super(FeedForward).__init__()
         self.D1 = tf.keras.layers.Dense(hidden_dim)
         self.Drop1 = tf.keras.layers.Dropout(dropout)
         self.D2 = tf.keras.layers.Dense(projection_dim)
@@ -238,7 +238,7 @@ class ReAttention(tf.keras.layers.Layer):
                  apply_transform=True,
                  transform_scale=False,
                  ):
-        super().__init__()
+        super(ReAttention).__init__()
         self.dim = dim
         self.num_heads = num_heads
         self.num_channels = num_channels
@@ -309,7 +309,7 @@ class AttentionTransformerEncoder(tf.keras.layers.Layer):
                  attn_drop:float,
                  proj_drop:float,
                  ):
-        super().__init__()
+        super(AttentionTransformerEncoder).__init__()
         # Parameters
         self.img_size = img_size
         self.patch_size = patch_size
@@ -364,7 +364,7 @@ class ReAttentionTransformerEncoder(tf.keras.layers.Layer):
                  attn_drop:float,
                  proj_drop:float,
                  ):
-        super().__init__()
+        super(ReAttentionTransformerEncoder).__init__()
         # Parameters
         self.img_size = img_size
         self.patch_size = patch_size
