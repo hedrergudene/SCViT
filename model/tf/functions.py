@@ -94,6 +94,7 @@ class Resampling(tf.keras.layers.Layer):
         else:
             return resampling(encoded, self.img_size, self.patch_size, self.num_channels)
 
+
 class PatchEncoder(tf.keras.layers.Layer):
     def __init__(self,
                  img_size:int=128,
@@ -116,6 +117,7 @@ class PatchEncoder(tf.keras.layers.Layer):
         positions = tf.range(start=0, limit=self.num_patches, delta=1)
         encoded = self.projection(X) + self.position_embedding(positions)
         return encoded
+
 
 class DeepPatchEncoder(tf.keras.layers.Layer):
     def __init__(self,
@@ -182,16 +184,19 @@ class DeepPatchEncoder(tf.keras.layers.Layer):
         # Embedding 2
         encoded = unflatten(encoded, self.num_channels)
         encoded = tf.transpose(encoded, [0,4,2,3,1])
+        positions = tf.expand_dims(positions, axis = 0)
+        positions = unflatten(positions, num_channels)
+        positions = tf.transpose(positions, [0,4,2,3,1])
         for i, resample in enumerate(self.seqCNN):
             # Generate next level positional encoding
-            encoded_CNN = tf.map_fn(lambda y: resample(y), elems = encoded)
+            positions = tf.map_fn(lambda y: resample(y), elems = positions)
             # Reshape encoded to add (non-trainable)
             encoded = tf.transpose(encoded, [0,4,2,3,1])
             encoded = tf.reshape(encoded, [-1, self.num_patches[i], self.projection_dim[i]])
             encoded = resampling(encoded, self.img_size, self.patch_size[i:i+2], self.num_channels)
             encoded = unflatten(encoded, self.num_channels)
             encoded = tf.transpose(encoded, [0,4,2,3,1])
-            encoded =  encoded + encoded_CNN
+            encoded =  encoded + positions
         encoded = tf.transpose(encoded, [0,4,2,3,1])
         encoded = tf.reshape(encoded, [-1, self.num_patches[-1], self.projection_dim[-1]])
         encoded = resampling(encoded, self.img_size, [self.patch_size[-1], self.patch_size[0]], self.num_channels)
