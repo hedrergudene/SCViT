@@ -42,14 +42,20 @@ def run_WB_experiment(WB_KEY:str,
     # Start X-validation
     for train_idx, val_idx in kf.split(df):
         # Generators
-        train_datagen = tf.keras.preprocessing.image.ImageDataGenerator(ImageDataGenerator_config['train'])
-        val_datagen = tf.keras.preprocessing.image.ImageDataGenerator(ImageDataGenerator_config['val'])
+        train_datagen = tf.keras.preprocessing.image.ImageDataGenerator(rescale=ImageDataGenerator_config['train']['rescale'],
+                                                                        shear_range=ImageDataGenerator_config['train']['shear_range'],
+                                                                        rotation_range=ImageDataGenerator_config['train']['rotation_range'],
+                                                                        zoom_range=ImageDataGenerator_config['train']['zoom_range'],
+                                                                        horizontal_flip=ImageDataGenerator_config['train']['horizontal_flip'],
+                                                                        )
+        val_datagen = tf.keras.preprocessing.image.ImageDataGenerator(rescale=ImageDataGenerator_config['val']['rescale'])
         flow_from_dataframe_config['train']['dataframe'] = df.iloc[train_idx]
         flow_from_dataframe_config['val']['dataframe'] = df.iloc[val_idx]
         train_generator = train_datagen.flow_from_dataframe(dataframe=flow_from_dataframe_config['train']['dataframe'],
                                       x_col=flow_from_dataframe_config['train']['x_col'],
                                       y_col=flow_from_dataframe_config['train']['y_col'],
                                       target_size=flow_from_dataframe_config['train']['target_size'],
+                                      batch_size=flow_from_dataframe_config['train']['batch_size'],
                                       color_mode=flow_from_dataframe_config['train']['color_mode'],
                                       class_mode=flow_from_dataframe_config['train']['class_mode'],
                                       shuffle=flow_from_dataframe_config['train']['shuffle'],
@@ -59,6 +65,7 @@ def run_WB_experiment(WB_KEY:str,
                                       x_col=flow_from_dataframe_config['val']['x_col'],
                                       y_col=flow_from_dataframe_config['val']['y_col'],
                                       target_size=flow_from_dataframe_config['val']['target_size'],
+                                      batch_size=flow_from_dataframe_config['val']['batch_size'],
                                       color_mode=flow_from_dataframe_config['val']['color_mode'],
                                       class_mode=flow_from_dataframe_config['val']['class_mode'],
                                       shuffle=flow_from_dataframe_config['val']['shuffle'],
