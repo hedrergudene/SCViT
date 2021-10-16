@@ -66,7 +66,7 @@ class Resampling(tf.keras.layers.Layer):
                  ):
         super(Resampling, self).__init__()
         # Validation
-        assert resampling_type in ['max', 'avg', 'standard'], f"Resampling type must be either 'max', 'avg' or 'standard'."
+        assert resampling_type in ['max', 'avg', 'standard', 'conv'], f"Resampling type must be either 'max', 'avg' or 'standard'."
         # Parameters
         self.img_size = img_size
         self.patch_size = patch_size
@@ -80,10 +80,14 @@ class Resampling(tf.keras.layers.Layer):
             self.projection_dim = projection_dim
             self.positions = tf.range(start=0, limit=self.num_patches[-1], delta=1)
             self.position_embedding = tf.keras.layers.Embedding(input_dim=self.num_patches[-1], output_dim=self.projection_dim)
-        else:
+        elif self.resampling_type=='standard':
             self.projection_dim = [self.num_channels*patch**2 for patch in self.patch_size]
             self.positions = tf.range(start=0, limit=self.num_patches[-1], delta=1)
             self.position_embedding = tf.keras.layers.Embedding(input_dim=self.num_patches[-1], output_dim=self.projection_dim[-1])
+        elif self.resampling_type=='conv':
+            self.projection_dim = [self.num_channels*patch**2 for patch in self.patch_size]
+            self.conv = tf.keras.layers.Conv2D(self.num_patches[-1], (2,2), strides = (2,2), padding = 'same')
+            self.linear = tf.keras.layers.Dense(self.projection_dim[-1])
 
     def call(self, encoded:tf.Tensor):
         if self.resampling_type=='max':
@@ -111,6 +115,13 @@ class Resampling(tf.keras.layers.Layer):
         elif self.resampling_type=='standard':
             encoded = resampling(encoded, self.img_size, self.patch_size, self.num_channels)
             encoded = encoded + self.position_embedding(self.positions)
+        elif self.resampling_type=='conv':
+            encoded = unflatten(encoded, self.num_channels)
+            encoded = tf.transpose(encoded, [0,4,2,3,1])
+            encoded = tf.map_fn(lambda y: self.conv(y), elems = encoded)
+            encoded = tf.transpose(encoded, [0,4,2,3,1])
+            encoded = tf.reshape(encoded, [-1, self.num_patches[-1], self.projection_dim[0]//4])
+            encoded = self.linear(encoded)
             return encoded
 
 ## Patch Encoder
