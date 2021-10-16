@@ -13,7 +13,7 @@ class ViT(tf.keras.layers.Layer):
                  num_heads:int=8,
                  transformer_layers:int=8,
                  hidden_unit_factor:float=2.,
-                 mlp_head_units:List[int]=[2048,1024],
+                 mlp_head_units:List[int]=[512,64],
                  num_classes:int=4,
                  drop_attn:float=.2,
                  drop_linear:float=.4,
@@ -146,8 +146,8 @@ class HViT(tf.keras.layers.Layer):
                     self.Encoder_RS.append(Resampling(self.img_size, self.patch_size[i:i+2], self.num_channels, self.projection_dim[i], self.resampling_type))
         ##MLP
         self.MLP = tf.keras.Sequential([tf.keras.layers.LayerNormalization(epsilon=1e-6),
-                                        tf.keras.layers.Flatten(),
-                                        tf.keras.layers.Dropout(self.drop_linear)])
+                                        tf.keras.layers.GlobalAveragePooling1D(),
+                                        ])
         for i in self.mlp_head_units:
             self.MLP.add(tf.keras.layers.Dense(i))
             self.MLP.add(tf.keras.layers.Dropout(self.drop_linear))

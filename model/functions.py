@@ -99,10 +99,10 @@ class Resampling(tf.keras.layers.Layer):
             return encoded
         elif self.resampling_type=='avg':
             # Merge patches "horizontally"
-            encoded = tf.keras.layers.MaxPool1D(pool_size = self.pool_size//2, strides = self.pool_size//2, padding = "same")(encoded)
+            encoded = tf.keras.layers.AveragePooling1D(pool_size = self.pool_size//2, strides = self.pool_size//2, padding = "same")(encoded)
             # Merge patches "vertically"
             encoded = tf.transpose(tf.reshape(encoded, [-1,self.num_patches[1], self.pool_size//2, self.projection_dim]), perm=[0,2,1,3])
-            encoded = tf.map_fn(lambda y:tf.keras.layers.MaxPool1D(pool_size = self.pool_size//2, strides = self.pool_size//2, padding = "same")(y), elems = encoded)
+            encoded = tf.map_fn(lambda y:tf.keras.layers.AveragePooling1D(pool_size = self.pool_size//2, strides = self.pool_size//2, padding = "same")(y), elems = encoded)
             encoded = tf.transpose(encoded, perm=[0,2,1,3])
             # Undo & PE
             encoded = tf.concat(tf.unstack(encoded, axis = 2), axis = -2)
