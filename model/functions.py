@@ -55,91 +55,90 @@ def resampling(encoded_patches, img_size:int=128, patch_size:List[int]=[16,8], n
     return new_patches_flattened
 
 # Layers
+## Resampling
 class Resampling(tf.keras.layers.Layer):
     def __init__(self,
                  img_size:int=128,
-                 patch_size:List[int]=[16,8],
+                 patch_size:List[int]=[8,16],
                  num_channels:int=1,
-                 trainable:bool=True,
+                 projection_dim:int=None,
+                 resampling_type:str='standard',
                  ):
         super(Resampling, self).__init__()
+        # Validation
+        assert resampling_type in ['max', 'avg', 'standard'], f"Resampling type must be either 'max', 'avg' or 'standard'."
         # Parameters
         self.img_size = img_size
         self.patch_size = patch_size
         self.num_patches = [(self.img_size//patch)**2 for patch in self.patch_size]
+        self.pool_size = self.num_patches[0]//self.num_patches[1]
         self.num_channels = num_channels
-        self.projection_dim = [self.num_channels*patch**2 for patch in self.patch_size]
-        self.trainable=trainable
+        self.resampling_type = resampling_type
         # Layers
-        if self.trainable:
+        if self.resampling_type in ['max','avg']:
+            assert projection_dim is not None, f"Projection_dim must be specified when performing 'max' or 'avg' pooling type."
+            self.projection_dim = projection_dim
+            self.positions = tf.range(start=0, limit=self.num_patches[-1], delta=1)
+            self.position_embedding = tf.keras.layers.Embedding(input_dim=self.num_patches[-1], output_dim=self.projection_dim)
+        else:
+            self.projection_dim = [self.num_channels*patch**2 for patch in self.patch_size]
             self.positions = tf.range(start=0, limit=self.num_patches[-1], delta=1)
             self.position_embedding = tf.keras.layers.Embedding(input_dim=self.num_patches[-1], output_dim=self.projection_dim[-1])
 
     def call(self, encoded:tf.Tensor):
-        if self.trainable:
+        if self.resampling_type=='max':
+            # Merge patches "horizontally"
+            encoded = tf.keras.layers.MaxPool1D(pool_size = self.pool_size//2, strides = self.pool_size//2, padding = "same")(encoded)
+            # Merge patches "vertically"
+            encoded = tf.transpose(tf.reshape(encoded, [-1,self.num_patches[1], self.pool_size//2, self.projection_dim]), perm=[0,2,1,3])
+            encoded = tf.map_fn(lambda y:tf.keras.layers.MaxPool1D(pool_size = self.pool_size//2, strides = self.pool_size//2, padding = "same")(y), elems = encoded)
+            encoded = tf.transpose(encoded, perm=[0,2,1,3])
+            # Undo & PE
+            encoded = tf.concat(tf.unstack(encoded, axis = 2), axis = -2)
+            encoded = encoded + self.position_embedding(self.positions)
+            return encoded
+        elif self.resampling_type=='avg':
+            # Merge patches "horizontally"
+            encoded = tf.keras.layers.MaxPool1D(pool_size = self.pool_size//2, strides = self.pool_size//2, padding = "same")(encoded)
+            # Merge patches "vertically"
+            encoded = tf.transpose(tf.reshape(encoded, [-1,self.num_patches[1], self.pool_size//2, self.projection_dim]), perm=[0,2,1,3])
+            encoded = tf.map_fn(lambda y:tf.keras.layers.MaxPool1D(pool_size = self.pool_size//2, strides = self.pool_size//2, padding = "same")(y), elems = encoded)
+            encoded = tf.transpose(encoded, perm=[0,2,1,3])
+            # Undo & PE
+            encoded = tf.concat(tf.unstack(encoded, axis = 2), axis = -2)
+            encoded = encoded + self.position_embedding(self.positions)
+            return encoded
+        elif self.resampling_type=='standard':
             encoded = resampling(encoded, self.img_size, self.patch_size, self.num_channels)
             encoded = encoded + self.position_embedding(self.positions)
             return encoded
-        else:
-            return resampling(encoded, self.img_size, self.patch_size, self.num_channels)
 
+## Patch Encoder
 class PatchEncoder(tf.keras.layers.Layer):
     def __init__(self,
                  img_size:int=128,
                  patch_size:int=16,
                  num_channels:int=1,
+                 projection_dim:int=None,
                  ):
         super(PatchEncoder, self).__init__()
         self.img_size = img_size
         self.patch_size = patch_size
         self.num_channels = num_channels
         self.num_patches = (self.img_size//self.patch_size)**2
-        self.projection_dim = self.num_channels*self.patch_size**2
+        if projection_dim is not None:
+            self.projection_dim = projection_dim
+        else:
+            self.projection_dim = self.num_channels*self.patch_size**2
         self.projection = tf.keras.layers.Dense(units=self.projection_dim)
         self.position_embedding = tf.keras.layers.Embedding(
             input_dim=self.num_patches, output_dim=self.projection_dim
         )
 
     def call(self, X:tf.Tensor):
-        X = tf.reshape(patches(X, self.patch_size), [-1, self.num_patches, self.projection_dim])
+        X = tf.reshape(patches(X, self.patch_size), [-1, self.num_patches, self.num_channels*self.patch_size**2])
         positions = tf.range(start=0, limit=self.num_patches, delta=1)
         encoded = self.projection(X) + self.position_embedding(positions)
-        return encoded
-
-class DeepPatchEncoder(tf.keras.layers.Layer):
-    def __init__(self,
-                 img_size:int=128,
-                 patch_size:List[int]=[16,8],
-                 num_channels:int=1,
-                 dropout:float=.2,
-                 bias:bool=False,
-                 ):
-        super(DeepPatchEncoder, self).__init__()
-        # Parameters
-        self.img_size = img_size
-        self.patch_size = patch_size
-        self.num_channels = num_channels
-        self.num_patches = [(self.img_size//patch)**2 for patch in self.patch_size]
-        self.projection_dim = [self.num_channels*patch**2 for patch in self.patch_size]
-        self.bias = bias
-        self.patch_size = self.patch_size + [self.patch_size[0]]
-        # Layers
-        self.dense = tf.keras.layers.Dense(self.projection_dim[0])
-        self.positions = []
-        self.position_embedding = []
-        for i in range(len(self.patch_size)-1):
-            self.positions.append(tf.range(start=0, limit=self.num_patches[i], delta=1))
-            self.position_embedding.append(tf.keras.layers.Embedding(
-            input_dim=self.num_patches[i], output_dim=self.projection_dim[i],
-        ))
-
-    def call(self, X:tf.Tensor):
-        # Flat patches
-        patch = patches(X,self.patch_size[0])
-        encoded = tf.reshape(patch, [-1, self.num_patches[0], self.projection_dim[0]])
-        for i in range(len(self.patch_size)-1):
-            encoded = encoded + self.position_embedding[i](self.positions[i])
-            encoded = resampling(encoded, self.img_size, [self.patch_size[i], self.patch_size[i+1]], self.num_channels)
         return encoded
 
 ## FeedForward
@@ -245,6 +244,7 @@ class AttentionTransformerEncoder(tf.keras.layers.Layer):
                  num_channels:int,
                  num_heads:int,
                  transformer_layers:int,
+                 projection_dim:int,
                  hidden_dim:int,
                  attn_drop:float,
                  proj_drop:float,
@@ -255,7 +255,7 @@ class AttentionTransformerEncoder(tf.keras.layers.Layer):
         self.patch_size = patch_size
         self.num_channels = num_channels
         self.num_patches = (self.img_size//self.patch_size)**2
-        self.projection_dim = self.num_channels*self.patch_size**2
+        self.projection_dim = projection_dim
         self.transformer_layers = transformer_layers
         self.hidden_dim = hidden_dim
         self.num_heads = num_heads
@@ -300,6 +300,7 @@ class ReAttentionTransformerEncoder(tf.keras.layers.Layer):
                  num_channels:int,
                  num_heads:int,
                  transformer_layers:int,
+                 projection_dim:int,
                  hidden_dim:int,
                  attn_drop:float,
                  proj_drop:float,
@@ -310,7 +311,7 @@ class ReAttentionTransformerEncoder(tf.keras.layers.Layer):
         self.patch_size = patch_size
         self.num_channels = num_channels
         self.num_patches = (self.img_size//self.patch_size)**2
-        self.projection_dim = self.num_channels*self.patch_size**2
+        self.projection_dim = projection_dim
         self.transformer_layers = transformer_layers
         self.hidden_dim = hidden_dim
         self.num_heads = num_heads
