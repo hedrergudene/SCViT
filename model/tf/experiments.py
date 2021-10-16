@@ -36,8 +36,11 @@ def run_WB_experiment(WB_KEY:str,
 
     # Gather data
     df = get_df(path)
-    train_data, test_data, train_label, _ = train_test_split(df['x_col'], df['y_col'], test_size = pct_split[-1], random_state = seed)
-    train_data, val_data, train_label, _ = train_test_split(train_data, train_label, test_size = pct_split[-2], random_state = seed)
+    train_data, test_data, train_label, test_label = train_test_split(df['x_col'], df['y_col'], test_size = pct_split[-1], random_state = seed)
+    train_data, val_data, train_label, val_label = train_test_split(train_data, train_label, test_size = pct_split[-2], random_state = seed)
+    train_df = pd.concat([train_data, train_label], axis = 1)
+    val_df = pd.concat([val_data, val_label], axis = 1)
+    test_df = pd.concat([test_data, test_label], axis = 1)
     # Log in WB
     wandb.login(key=WB_KEY)
     # Generators
@@ -49,9 +52,9 @@ def run_WB_experiment(WB_KEY:str,
                                                                     )
     val_datagen = tf.keras.preprocessing.image.ImageDataGenerator(rescale=ImageDataGenerator_config['val']['rescale'])
     test_datagen = tf.keras.preprocessing.image.ImageDataGenerator(rescale=ImageDataGenerator_config['test']['rescale'])
-    flow_from_dataframe_config['train']['dataframe'] = df.iloc[train_data.index]
-    flow_from_dataframe_config['val']['dataframe'] = df.iloc[val_data.index]
-    flow_from_dataframe_config['test']['dataframe'] = df.iloc[test_data.index]
+    flow_from_dataframe_config['train']['dataframe'] = train_df
+    flow_from_dataframe_config['val']['dataframe'] = val_df
+    flow_from_dataframe_config['test']['dataframe'] = test_df
     train_generator = train_datagen.flow_from_dataframe(dataframe=flow_from_dataframe_config['train']['dataframe'],
                                   x_col=flow_from_dataframe_config['train']['x_col'],
                                   y_col=flow_from_dataframe_config['train']['y_col'],
@@ -85,7 +88,7 @@ def run_WB_experiment(WB_KEY:str,
     # Train & validation steps
     train_steps_per_epoch = len(train_generator)
     val_steps_per_epoch = len(val_generator)
-    test_steps_per_epoch = len(val_generator)
+    test_steps_per_epoch = len(test_generator)
     # Credentials
     wandb.init(project=WB_PROJECT, entity=WB_ENTITY, group = WB_GROUP)
     # Model compile
@@ -117,9 +120,13 @@ def run_WB_experiment(WB_KEY:str,
     results = model.evaluate(test_generator, steps = test_steps_per_epoch, verbose = 0)
     print("Test metrics:",{k:v for k,v in zip(model.metrics_names, results)})
     # Save model
-    model.save('/tmp/model_checkpoint.h5')
+    try:
+        model.save('/tmp/model_checkpoint.h5')
+    except:
+        print(f"Model could not be saved.")
     # Clear memory
     tf.keras.backend.clear_session()
+    return history
 
 
 def run_CV_WB_experiment(WB_KEY:str,
