@@ -60,25 +60,23 @@ class Resampling(tf.keras.layers.Layer):
                  img_size:int=128,
                  patch_size:List[int]=[16,8],
                  num_channels:int=1,
-                 type:str='linear',
+                 trainable:bool=True,
                  ):
         super(Resampling, self).__init__()
-        # Validations
-        assert type in ['linear', 'nontrainable'], f"Resampling type must be either 'linear' or 'nontrainable'."
         # Parameters
         self.img_size = img_size
         self.patch_size = patch_size
         self.num_patches = [(self.img_size//patch)**2 for patch in self.patch_size]
         self.num_channels = num_channels
         self.projection_dim = [self.num_channels*patch**2 for patch in self.patch_size]
-        self.type=type
+        self.trainable=trainable
         # Layers
-        if self.type=='linear':
+        if self.trainable:
             self.positions = tf.range(start=0, limit=self.num_patches[-1], delta=1)
             self.position_embedding = tf.keras.layers.Embedding(input_dim=self.num_patches[-1], output_dim=self.projection_dim[-1])
 
     def call(self, encoded:tf.Tensor):
-        if self.type=='linear':
+        if self.trainable:
             encoded = resampling(encoded, self.img_size, self.patch_size, self.num_channels)
             encoded = encoded + self.position_embedding(self.positions)
             return encoded
@@ -103,7 +101,7 @@ class PatchEncoder(tf.keras.layers.Layer):
         )
 
     def call(self, X:tf.Tensor):
-        X = patches(X, self.patch_size)
+        X = tf.reshape(patches(X, self.patch_size), [-1, self.num_patches, self.projection_dim])
         positions = tf.range(start=0, limit=self.num_patches, delta=1)
         encoded = self.projection(X) + self.position_embedding(positions)
         return encoded

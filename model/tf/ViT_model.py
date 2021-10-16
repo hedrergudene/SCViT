@@ -95,8 +95,7 @@ class HViT(tf.keras.layers.Layer):
         self.hidden_units = [int(hidden_unit_factor*proj) for proj in self.projection_dim]
         # Layers
         ##Positional Encoding
-        if self.preprocessing=="independent":
-            self.PE = PatchEncoder(self.img_size, self.patch_size[0], self.num_channels)
+        self.PE = PatchEncoder(self.img_size, self.patch_size[0], self.num_channels)
         ##Encoder
         self.Encoder = []
         self.Encoder_RS = []        
