@@ -60,37 +60,28 @@ class Resampling(tf.keras.layers.Layer):
                  img_size:int=128,
                  patch_size:List[int]=[16,8],
                  num_channels:int=1,
-                 dropout:float=0.,
-                 trainable:bool=True,
+                 type:str='linear',
                  ):
         super(Resampling, self).__init__()
+        # Validations
+        assert type in ['linear', 'nontrainable'], f"Resampling type must be either 'linear' or 'nontrainable'."
         # Parameters
         self.img_size = img_size
         self.patch_size = patch_size
         self.num_patches = [(self.img_size//patch)**2 for patch in self.patch_size]
         self.num_channels = num_channels
         self.projection_dim = [self.num_channels*patch**2 for patch in self.patch_size]
-        self.trainable = trainable
+        self.type=type
         # Layers
-        if trainable:
-            self.BN = tf.keras.layers.BatchNormalization()
-            self.LeakyReLU = tf.keras.layers.LeakyReLU()
-            self.drop = tf.keras.layers.Dropout(dropout)
-            if self.patch_size[0]>self.patch_size[1]:
-                self.rs = tf.keras.layers.Conv2D(self.num_patches[1], (3,3), strides=(2,2), padding='same', kernel_initializer=tf.random_normal_initializer(0., 0.02), use_bias=False)
-            else:
-                self.rs = tf.keras.layers.Conv2DTranspose(self.num_patches[1], (3,3), strides=(2,2), padding='same', kernel_initializer=tf.random_normal_initializer(0., 0.02), use_bias=False)
+        if self.type=='linear':
+            self.positions = tf.range(start=0, limit=self.num_patches[-1], delta=1)
+            self.position_embedding = tf.keras.layers.Embedding(input_dim=self.num_patches[-1], output_dim=self.projection_dim[-1])
 
     def call(self, encoded:tf.Tensor):
-        if self.trainable:
-            X_patch = unflatten(encoded, self.num_channels)
-            X_patch = tf.transpose(X_patch, perm=[0,4,2,3,1])
-            X_patch = tf.map_fn(fn=lambda y: self.rs(y), elems = X_patch)
-            X_patch = self.BN(X_patch)
-            X_patch = self.drop(X_patch)
-            X_patch = self.LeakyReLU(X_patch)
-            X_patch = tf.transpose(X_patch, perm=[0,4,2,3,1])
-            return tf.reshape(X_patch, [-1, self.num_patches[1], self.projection_dim[1]])
+        if self.type=='linear':
+            encoded = resampling(encoded, self.img_size, self.patch_size, self.num_channels)
+            encoded = encoded + self.position_embedding(self.positions)
+            return encoded
         else:
             return resampling(encoded, self.img_size, self.patch_size, self.num_channels)
 
@@ -151,86 +142,6 @@ class DeepPatchEncoder(tf.keras.layers.Layer):
         for i in range(len(self.patch_size)-1):
             encoded = encoded + self.position_embedding[i](self.positions[i])
             encoded = resampling(encoded, self.img_size, [self.patch_size[i], self.patch_size[i+1]], self.num_channels)
-        return encoded
-
-class DeepPatchEncoder_CNN(tf.keras.layers.Layer):
-    def __init__(self,
-                 img_size:int=128,
-                 patch_size:List[int]=[16,8],
-                 num_channels:int=1,
-                 dropout:float=.2,
-                 bias:bool=False,
-                 ):
-        super(DeepPatchEncoder_CNN, self).__init__()
-        # Parameters
-        self.img_size = img_size
-        self.patch_size = patch_size
-        self.num_channels = num_channels
-        self.num_patches = [(self.img_size//patch)**2 for patch in self.patch_size]
-        self.projection_dim = [self.num_channels*patch**2 for patch in self.patch_size]
-        self.kernel_size = [patch//2 for patch in self.patch_size]
-        self.patch_size_extended = [self.img_size] + self.patch_size
-        self.bias = bias
-        # Layers
-        self.dense = tf.keras.layers.Dense(self.projection_dim[0])
-        self.position_embedding = tf.keras.layers.Embedding(
-            input_dim=self.num_patches[0], output_dim=self.projection_dim[0],
-        )
-        ## Sub
-        self.seqCNN = []
-        if self.patch_size[0]>self.patch_size[-1]:
-            self.strides_size = [self.patch_size_extended[i]//self.patch_size_extended[i+1] for i in range(len(self.patch_size))]
-            for i in range(len(self.patch_size)-1):
-                self.seqCNN.append(tf.keras.Sequential([
-                                                     tf.keras.layers.Conv2D(self.num_patches[i+1],
-                                                                            kernel_size=self.kernel_size[i+1],
-                                                                            strides=self.strides_size[i+1],
-                                                                            padding='same',
-                                                                            use_bias=self.bias,
-                                                                            kernel_initializer=tf.keras.initializers.RandomNormal(0, .02),
-                                                                            ),
-                                                     tf.keras.layers.BatchNormalization(),
-                                                      ])
-                                )
-        else:
-            self.strides_size = [self.patch_size_extended[i+1]//self.patch_size_extended[i] for i in range(len(self.patch_size))]
-            for i in range(len(self.patch_size)-1):
-                self.seqCNN.append(tf.keras.Sequential([
-                                                     tf.keras.layers.Conv2DTranspose(self.num_patches[i+1],
-                                                                                     kernel_size=self.kernel_size[i+1],
-                                                                                     strides=self.strides_size[i+1],
-                                                                                     padding='same',
-                                                                                     use_bias=self.bias,
-                                                                                     kernel_initializer=tf.keras.initializers.RandomNormal(0, .02),
-                                                                                     ),
-                                                     tf.keras.layers.BatchNormalization(),
-                                                      ])
-                                )
-
-    def call(self, X:tf.Tensor):
-        # Flat patches
-        patch = patches(X,self.patch_size[0])
-        encoded = tf.reshape(patch, [-1, self.num_patches[0], self.projection_dim[0]])
-        # Embedding 1
-        positions = tf.range(start=0, limit=self.num_patches[0], delta=1)
-        positions = self.position_embedding(positions)
-        encoded = encoded + positions
-        # Embedding 2
-        encoded = unflatten(encoded, self.num_channels)
-        encoded = tf.transpose(encoded, [0,4,2,3,1])
-        for i, resample in enumerate(self.seqCNN):
-            # Generate next level positional encoding
-            encoded_CNN = tf.map_fn(lambda y: resample(y), elems = encoded)
-            # Reshape encoded to add (non-trainable)
-            encoded = tf.transpose(encoded, [0,4,2,3,1])
-            encoded = tf.reshape(encoded, [-1, self.num_patches[i], self.projection_dim[i]])
-            encoded = resampling(encoded, self.img_size, self.patch_size[i:i+2], self.num_channels)
-            encoded = unflatten(encoded, self.num_channels)
-            encoded = tf.transpose(encoded, [0,4,2,3,1])
-            encoded =  encoded + encoded_CNN
-        encoded = tf.transpose(encoded, [0,4,2,3,1])
-        encoded = tf.reshape(encoded, [-1, self.num_patches[-1], self.projection_dim[-1]])
-        encoded = resampling(encoded, self.img_size, [self.patch_size[-1], self.patch_size[0]], self.num_channels)
         return encoded
 
 ## FeedForward
