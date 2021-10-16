@@ -153,6 +153,35 @@ class HViT(tf.keras.layers.Layer):
             self.MLP.add(tf.keras.layers.Dropout(self.drop_linear))
         self.MLP.add(tf.keras.layers.Dense(self.num_classes))
 
+
+    def get_config(self):
+
+        config = super(HViT, self).get_config().copy()
+        config.update({
+                        'img_size':self.img_size,
+                        'patch_size':self.patch_size,
+                        'patch_size_rev':self.patch_size_rev,
+                        'num_channels':self.num_channels,
+                        'num_heads':self.num_heads,
+                        'transformer_layers':self.transformer_layers,
+                        'mlp_head_units':self.mlp_head_units,
+                        'num_classes':self.num_classes,
+                        'drop_attn':self.drop_attn,
+                        'drop_proj':self.drop_proj,
+                        'drop_linear':self.drop_linear,
+                        'resampling_type':self.resampling_type,
+                        'original_attn':self.original_attn,
+                        'num_patches':self.num_patches,
+                        'projection_dim':self.projection_dim,
+                        'hidden_units':self.hidden_units,
+                        'PE':self.PE,
+                        'Encoder':self.Encoder,
+                        'Encoder_RS':self.Encoder_RS,
+                        'MLP':self.MLP,
+                        })
+        return config
+
+    
     def call(self, X:tf.Tensor):
         # Patch
         encoded = self.PE(X)
