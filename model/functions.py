@@ -88,6 +88,8 @@ class Resampling(tf.keras.layers.Layer):
             self.projection_dim = [self.num_channels*patch**2 for patch in self.patch_size]
             self.conv = tf.keras.layers.Conv2D(self.num_patches[-1], (2,2), strides = (2,2), padding = 'same')
             self.linear = tf.keras.layers.Dense(self.projection_dim[-1])
+            self.positions = tf.range(start=0, limit=self.num_patches[-1], delta=1)
+            self.position_embedding = tf.keras.layers.Embedding(input_dim=self.num_patches[-1], output_dim=self.projection_dim[-1])
 
     def call(self, encoded:tf.Tensor):
         if self.resampling_type=='max':
@@ -121,7 +123,7 @@ class Resampling(tf.keras.layers.Layer):
             encoded = tf.map_fn(lambda y: self.conv(y), elems = encoded)
             encoded = tf.transpose(encoded, [0,4,2,3,1])
             encoded = tf.reshape(encoded, [-1, self.num_patches[-1], self.projection_dim[0]//4])
-            encoded = self.linear(encoded)
+            encoded = self.linear(encoded) + self.position_embedding(self.positions)
             return encoded
 
 ## Patch Encoder
