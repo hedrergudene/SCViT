@@ -61,8 +61,8 @@ class Resampling(tf.keras.layers.Layer):
                  img_size:int=128,
                  patch_size:List[int]=[8,16],
                  num_channels:int=1,
-                 projection_dim:int=None,
-                 resampling_type:str='standard',
+                 projection_dim:int=256,
+                 resampling_type:str='cnn',
                  ):
         super(Resampling, self).__init__()
         # Validation
@@ -84,6 +84,7 @@ class Resampling(tf.keras.layers.Layer):
             self.projection_dim = [projection_dim if projection_dim is not None else self.num_channels*patch**2 for patch in self.patch_size]
             self.positions = tf.range(start=0, limit=self.num_patches[-1], delta=1)
             self.position_embedding = tf.keras.layers.Embedding(input_dim=self.num_patches[-1], output_dim=self.projection_dim[-1])
+            self.linear = tf.keras.layers.Dense(self.projection_dim[-1])
         elif self.resampling_type=='conv':
             assert (projection_dim is None) or (int(np.sqrt(projection_dim))==np.sqrt(projection_dim)), f"If provided, projection dim\
                 has to be a perfect square with resampling_type=='conv'."
@@ -118,7 +119,7 @@ class Resampling(tf.keras.layers.Layer):
             return encoded
         elif self.resampling_type=='standard':
             encoded = resampling(encoded, self.img_size, self.patch_size, self.num_channels)
-            encoded = encoded + self.position_embedding(self.positions)
+            encoded = self.linear(encoded) + self.position_embedding(self.positions)
         elif self.resampling_type=='conv':
             encoded = unflatten(encoded, self.num_channels)
             encoded = tf.transpose(encoded, [0,4,2,3,1])

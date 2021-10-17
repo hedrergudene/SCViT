@@ -82,9 +82,6 @@ class HViT(tf.keras.layers.Layer):
         assert len(patch_size)==len(transformer_layers), f"Each patch size must have its own number of transformer layers."
         assert all([img_size//patch==img_size/patch for patch in patch_size]), f"Patch sizes must divide image size."
         assert all([patch_size[i]<patch_size[i+1] for i in range(len(patch_size)-1)]), f"Patch sizes must be a strictly increasing sequence."
-        assert (resampling_type in ["max","avg"] and projection_dim is not None) or (resampling_type in ["standard", "conv"] and projection_dim is None),f"\
-            If resampling_type is in ['max', 'avg'], projection_dim must be specified. If resampling_type is 'standard', projection_dim is auto\
-            matically computed."
         # Parameters
         self.img_size = img_size
         self.patch_size = patch_size
