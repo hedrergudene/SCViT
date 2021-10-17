@@ -100,12 +100,8 @@ class HViT(tf.keras.layers.Layer):
         self.resampling_type = resampling_type
         self.original_attn = original_attn
         self.num_patches = [(self.img_size//patch)**2 for patch in self.patch_size]
-        if projection_dim is not None:
-            self.projection_dim = [projection_dim for _ in self.patch_size]
-            self.hidden_units = [int(hidden_unit_factor*proj) for proj in self.projection_dim]
-        else:
-            self.projection_dim = [self.num_channels*patch**2 for patch in self.patch_size]
-            self.hidden_units = [int(hidden_unit_factor*proj) for proj in self.projection_dim]
+        self.projection_dim = [projection_dim if projection_dim is not None else self.num_channels*patch**2 for patch in self.patch_size]
+        self.hidden_units = [int(hidden_unit_factor*proj) for proj in self.projection_dim]
         # Layers
         ##Positional Encoding
         self.PE = PatchEncoder(self.img_size, self.patch_size[0], self.num_channels, self.projection_dim[0])

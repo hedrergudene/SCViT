@@ -119,6 +119,7 @@ def run_WB_experiment(WB_KEY:str,
     # Evaluation
     results = model.evaluate(test_generator, steps = test_steps_per_epoch, verbose = 0)
     print("Test metrics:",{k:v for k,v in zip(model.metrics_names, results)})
+    wandb.log({'test_loss':results[0], 'test_accuracy':results[1]})
     # Save model
     try:
         model.save('/tmp/model_checkpoint.h5')
