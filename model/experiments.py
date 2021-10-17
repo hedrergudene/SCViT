@@ -126,6 +126,7 @@ def run_WB_experiment(WB_KEY:str,
         print(f"Model could not be saved.")
     # Clear memory
     tf.keras.backend.clear_session()
+    wandb.finish()
     return history
 
 

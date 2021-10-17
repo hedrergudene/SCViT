@@ -266,7 +266,7 @@ class AttentionTransformerEncoder(tf.keras.layers.Layer):
         self.patch_size = patch_size
         self.num_channels = num_channels
         self.num_patches = (self.img_size//self.patch_size)**2
-        self.projection_dim = projection_dim
+        self.projection_dim = projection_dim if projection_dim is not None else self.num_channels*self.patch_size**2
         self.transformer_layers = transformer_layers
         self.hidden_dim = hidden_dim
         self.num_heads = num_heads
@@ -322,7 +322,7 @@ class ReAttentionTransformerEncoder(tf.keras.layers.Layer):
         self.patch_size = patch_size
         self.num_channels = num_channels
         self.num_patches = (self.img_size//self.patch_size)**2
-        self.projection_dim = projection_dim
+        self.projection_dim = projection_dim if projection_dim is not None else self.num_channels*self.patch_size**2
         self.transformer_layers = transformer_layers
         self.hidden_dim = hidden_dim
         self.num_heads = num_heads
