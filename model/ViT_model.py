@@ -154,7 +154,7 @@ class HViT(tf.keras.layers.Layer):
                                             tf.keras.layers.Lambda(lambda y: tf.transpose(unflatten(y, self.num_channels), perm=[0,4,2,3,1])),
                                             tf.keras.layers.Conv2D(1, self.num_patches[-1]//2, strides = self.num_patches[-1]//2, padding = 'same'),
                                             tf.keras.layers.Lambda(lambda y: tf.transpose(y, perm=[0,4,2,3,1])),
-                                            tf.keras.layers.Lambda(lambda y: tf.squeeze(tf.reshape(y, shape=[-1,1,self.num_patches[-1]//8]), axis = 1)),
+                                            tf.keras.layers.Lambda(lambda y: tf.squeeze(tf.reshape(y, shape=[-1,1,self.num_patches[-1]**2//16]), axis = 1)),
                                             tf.keras.layers.LayerNormalization(epsilon=1e-6),
                                             tf.keras.layers.Dense(self.projection_dim[-1]),
                                             tf.keras.layers.Dropout(self.drop_linear),
