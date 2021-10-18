@@ -131,7 +131,7 @@ def run_WB_experiment(WB_KEY:str,
     return history
 
 
-def run_WB_experiment(WB_KEY:str,
+def run_WB_CV_experiment(WB_KEY:str,
                       WB_ENTITY:str,
                       WB_PROJECT:str,
                       WB_GROUP:str,
