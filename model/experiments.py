@@ -154,7 +154,7 @@ def run_WB_CV_experiment(WB_KEY:str,
     # Set up cross validation
     df = get_df(path)
     kf = StratifiedKFold(n_splits = folds, shuffle = True, random_state = seed)
-    for i, (train_idx, val_idx) in enumerate(kf.split(df)):
+    for i, (train_idx, val_idx) in enumerate(kf.split(df['x_col'], df['y_col'])):
         # Gather data
         train_df = df.iloc[train_idx,:]
         val_df = df.iloc[val_idx,:]
