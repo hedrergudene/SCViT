@@ -131,16 +131,17 @@ def run_WB_experiment(WB_KEY:str,
     return history
 
 
-def run_CV_WB_experiment(WB_KEY:str,
+def run_WB_experiment(WB_KEY:str,
                       WB_ENTITY:str,
                       WB_PROJECT:str,
                       WB_GROUP:str,
                       model:tf.keras.Model,
                       ImageDataGenerator_config:Dict,
                       flow_from_dataframe_config:Dict,
-                      path:str="/content/OCT2017 /",
-                      epochs:int=10,
-                      folds:int=5,
+                      path:str="/content/OCT2017 /train/",
+                      test_path_str="/content/OCT2017 /test/",
+                      folds:int=4,
+                      epochs:int=8,
                       learning_rate:float=0.00005,
                       weight_decay:float=0.0001,
                       label_smoothing:float=.1,
@@ -149,14 +150,14 @@ def run_CV_WB_experiment(WB_KEY:str,
                       ):
     # Check for GPU:
     assert len(tf.config.list_physical_devices('GPU'))>0, f"No GPU available. Check system settings."
-
-    # Gather data
+    # Set up cross validation
     df = get_df(path)
-    kf = KFold(n_splits = folds, shuffle = True, random_state = seed)
-    # Log in WB
-    wandb.login(key=WB_KEY)
-    # Start X-validation
+    kf = StratifiedKFold(n_splits = folds, shuffle = True, random_state = seed)
     for i, (train_idx, val_idx) in enumerate(kf.split(df)):
+        # Gather data
+        train_df = df.iloc[train_idx,:]
+        val_df = df.iloc[val_idx,:]
+        test_df = get_df(test_path)
         # Generators
         train_datagen = tf.keras.preprocessing.image.ImageDataGenerator(rescale=ImageDataGenerator_config['train']['rescale'],
                                                                         shear_range=ImageDataGenerator_config['train']['shear_range'],
@@ -165,8 +166,10 @@ def run_CV_WB_experiment(WB_KEY:str,
                                                                         horizontal_flip=ImageDataGenerator_config['train']['horizontal_flip'],
                                                                         )
         val_datagen = tf.keras.preprocessing.image.ImageDataGenerator(rescale=ImageDataGenerator_config['val']['rescale'])
-        flow_from_dataframe_config['train']['dataframe'] = df.iloc[train_idx]
-        flow_from_dataframe_config['val']['dataframe'] = df.iloc[val_idx]
+        test_datagen = tf.keras.preprocessing.image.ImageDataGenerator(rescale=ImageDataGenerator_config['test']['rescale'])
+        flow_from_dataframe_config['train']['dataframe'] = train_df
+        flow_from_dataframe_config['val']['dataframe'] = val_df
+        flow_from_dataframe_config['test']['dataframe'] = test_df
         train_generator = train_datagen.flow_from_dataframe(dataframe=flow_from_dataframe_config['train']['dataframe'],
                                       x_col=flow_from_dataframe_config['train']['x_col'],
                                       y_col=flow_from_dataframe_config['train']['y_col'],
@@ -187,9 +190,22 @@ def run_CV_WB_experiment(WB_KEY:str,
                                       shuffle=flow_from_dataframe_config['val']['shuffle'],
                                       seed=flow_from_dataframe_config['val']['seed'],
                                       )
+        test_generator = test_datagen.flow_from_dataframe(dataframe=flow_from_dataframe_config['test']['dataframe'],
+                                      x_col=flow_from_dataframe_config['test']['x_col'],
+                                      y_col=flow_from_dataframe_config['test']['y_col'],
+                                      target_size=flow_from_dataframe_config['test']['target_size'],
+                                      batch_size=flow_from_dataframe_config['test']['batch_size'],
+                                      color_mode=flow_from_dataframe_config['test']['color_mode'],
+                                      class_mode=flow_from_dataframe_config['test']['class_mode'],
+                                      shuffle=flow_from_dataframe_config['test']['shuffle'],
+                                      seed=flow_from_dataframe_config['test']['seed'],
+                                      )
         # Train & validation steps
         train_steps_per_epoch = len(train_generator)
         val_steps_per_epoch = len(val_generator)
+        test_steps_per_epoch = len(test_generator)
+        # Log in WB
+        wandb.login(key=WB_KEY)
         # Credentials
         wandb.init(project=WB_PROJECT, entity=WB_ENTITY, group = WB_GROUP)
         # Model compile
@@ -203,10 +219,6 @@ def run_CV_WB_experiment(WB_KEY:str,
                 tf.keras.metrics.CategoricalAccuracy(name="accuracy"),
             ],
         )
-        if i==0:
-            model.save_weights('/tmp/model.h5')
-        else:
-            model.load_weights('/tmp/model.h5')
         # Callbacks
         reduceLR = tf.keras.callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.2, patience=5, min_lr=learning_rate//10)
         patience = tf.keras.callbacks.EarlyStopping(patience=2),
@@ -221,5 +233,10 @@ def run_CV_WB_experiment(WB_KEY:str,
             callbacks=[reduceLR, patience, wandb_callback],
             verbose = verbose,
         )
+        # Evaluation
+        results = model.evaluate(test_generator, steps = test_steps_per_epoch, verbose = 0)
+        print("Test metrics:",{k:v for k,v in zip(model.metrics_names, results)})
+        wandb.log({'test_loss':results[0], 'test_accuracy':results[1]})
         # Clear memory
         tf.keras.backend.clear_session()
+        wandb.finish()
