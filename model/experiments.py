@@ -226,7 +226,8 @@ def run_WB_CV_experiment(WB_KEY:str,
         )
         # Callbacks
         reduceLR = tf.keras.callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.2, patience=5, min_lr=learning_rate//10)
-        patience = tf.keras.callbacks.EarlyStopping(patience=2),
+        patience = tf.keras.callbacks.EarlyStopping(patience=2)
+        checkpoint = tf.keras.callbacks.ModelCheckpoint(os.path.join(os.getcwd(), 'model_best_weights.h5'), save_best_only = True, save_weights_only = True)
         wandb_callback = wandb.keras.WandbCallback(save_weights_only=True)
         # Model fit
         history = model.fit(
@@ -235,10 +236,11 @@ def run_WB_CV_experiment(WB_KEY:str,
             epochs = epochs,
             validation_data=val_generator,
             validation_steps = val_steps_per_epoch,
-            callbacks=[reduceLR, patience, wandb_callback],
+            callbacks=[reduceLR, patience, checkpoint, wandb_callback],
             verbose = verbose,
         )
         # Evaluation
+        model.load_weights(os.path.join(os.getcwd(), 'model_best_weights.h5'))
         results = model.evaluate(test_generator, steps = test_steps_per_epoch, verbose = 0)
         print("Test metrics:",{k:v for k,v in zip(model.metrics_names, results)})
         wandb.log({'test_loss':results[0], 'test_accuracy':results[1]})
