@@ -93,6 +93,31 @@ class Resampling(tf.keras.layers.Layer):
             self.linear = tf.keras.layers.Dense(self.projection_dim[-1])
             self.positions = tf.range(start=0, limit=self.num_patches[-1], delta=1)
             self.position_embedding = tf.keras.layers.Embedding(input_dim=self.num_patches[-1], output_dim=self.projection_dim[-1])
+          
+          
+    def get_config(self):
+        config = super(Resampling, self).get_config().copy()
+        config.update({
+                        'img_size':self.img_size,
+                        'patch_size':self.patch_size,
+                        'num_patches':self.num_patches,
+                        'num_channels':self.num_channels,
+                        'pool_size':self.pool_size,
+                        'resampling_type':self.resampling_type,
+                        'projection_dim':self.projection_dim,
+                        'positions':self.positions,
+                        'position_embedding':self.position_embedding,
+                        })
+        if self.resampling_type in ['standard']:
+                  config.update({
+                        'linear':self.linear,
+                        })
+        if self.resampling_type in ['conv']:
+                  config.update({
+                        'linear':self.linear,
+                        'conv':self.conv,
+                        })
+        return config
 
     def call(self, encoded:tf.Tensor):
         if self.resampling_type=='max':
@@ -147,6 +172,19 @@ class PatchEncoder(tf.keras.layers.Layer):
         self.position_embedding = tf.keras.layers.Embedding(
             input_dim=self.num_patches, output_dim=self.projection_dim
         )
+          
+    def get_config(self):
+        config = super(PatchEncoder, self).get_config().copy()
+        config.update({
+                        'img_size':self.img_size,
+                        'patch_size':self.patch_size,
+                        'num_patches':self.num_patches,
+                        'num_channels':self.num_channels,
+                        'projection_dim':self.projection_dim,
+                        'projection':self.projection,
+                        'position_embedding':self.position_embedding,
+                        })
+        return config
 
     def call(self, X:tf.Tensor):
         X = tf.reshape(patches(X, self.patch_size), [-1, self.num_patches, self.num_channels*self.patch_size**2])
@@ -166,6 +204,16 @@ class FeedForward(tf.keras.layers.Layer):
         self.Drop1 = tf.keras.layers.Dropout(dropout)
         self.D2 = tf.keras.layers.Dense(projection_dim)
         self.Drop2 = tf.keras.layers.Dropout(dropout)
+
+    def get_config(self):
+        config = super(FeedForward, self).get_config().copy()
+        config.update({
+                        'D1':self.D1,
+                        'Drop1':self.Drop1,
+                        'D2':self.D2,
+                        'Drop2':self.Drop2,
+                        })
+        return config
 
     def call(self, x):
         x = self.D1(x)
@@ -294,6 +342,16 @@ class AttentionTransformerEncoder(tf.keras.layers.Layer):
                                        dropout = self.proj_drop,
                                        )
             )
+                    
+    def get_config(self):
+        config = super(AttentionTransformerEncoder, self).get_config().copy()
+        config.update({
+                        'LN1':self.LN1,
+                        'LN2':self.LN2,
+                        'Attn':self.Attn,
+                        'FF':self.FF,
+                        })
+        return config
 
     def call(self, encoded_patches):
         for i in range(self.transformer_layers):
