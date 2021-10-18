@@ -151,6 +151,10 @@ def run_WB_CV_experiment(WB_KEY:str,
                       ):
     # Check for GPU:
     assert len(tf.config.list_physical_devices('GPU'))>0, f"No GPU available. Check system settings."
+    # Take initial model weights to reset each iteration
+    model.save_weights(os.path.join(os.getcwd(), 'model_weights.h5'))
+    # Log in WB
+    wandb.login(key=WB_KEY)
     # Set up cross validation
     df = get_df(path)
     kf = StratifiedKFold(n_splits = folds, shuffle = True, random_state = seed)
@@ -205,8 +209,8 @@ def run_WB_CV_experiment(WB_KEY:str,
         train_steps_per_epoch = len(train_generator)
         val_steps_per_epoch = len(val_generator)
         test_steps_per_epoch = len(test_generator)
-        # Log in WB
-        wandb.login(key=WB_KEY)
+        # Save initial weights
+        model.load_weights(os.path.join(os.getcwd(), 'model_weights.h5'))
         # Credentials
         wandb.init(project=WB_PROJECT, entity=WB_ENTITY, group = WB_GROUP)
         # Model compile
@@ -223,7 +227,7 @@ def run_WB_CV_experiment(WB_KEY:str,
         # Callbacks
         reduceLR = tf.keras.callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.2, patience=5, min_lr=learning_rate//10)
         patience = tf.keras.callbacks.EarlyStopping(patience=2),
-        wandb_callback = wandb.keras.WandbCallback()
+        wandb_callback = wandb.keras.WandbCallback(save_weights_only=True)
         # Model fit
         history = model.fit(
             train_generator,
