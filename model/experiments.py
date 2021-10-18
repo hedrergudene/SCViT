@@ -5,6 +5,7 @@ from sklearn.model_selection import KFold, train_test_split
 from typing import Dict, List
 import os
 import pandas as pd
+from sklearn.model_selection import StratifiedKFold
 
 def get_df(path:str):
     labels = os.listdir(path)
@@ -139,7 +140,7 @@ def run_WB_CV_experiment(WB_KEY:str,
                       ImageDataGenerator_config:Dict,
                       flow_from_dataframe_config:Dict,
                       path:str="/content/OCT2017 /train/",
-                      test_path_str="/content/OCT2017 /test/",
+                      test_path:str="/content/OCT2017 /test/",
                       folds:int=4,
                       epochs:int=8,
                       learning_rate:float=0.00005,
