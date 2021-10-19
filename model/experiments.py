@@ -114,7 +114,7 @@ def run_WB_experiment(WB_KEY:str,
         ],
     )
     # Callbacks
-    reduceLR = tf.keras.callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.2, patience=2, min_lr=learning_rate//10)
+    reduceLR = tf.keras.callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.2, patience=2, min_lr=learning_rate//10, verbose=1)
     patience = tf.keras.callbacks.EarlyStopping(patience=es_patience)
     checkpoint = tf.keras.callbacks.ModelCheckpoint(os.path.join(os.getcwd(), 'model_best_weights.h5'), save_best_only = True, save_weights_only = True)
     wandb_callback = wandb.keras.WandbCallback(save_weights_only=True)
@@ -235,7 +235,7 @@ def run_WB_CV_experiment(WB_KEY:str,
             ],
         )
         # Callbacks
-        reduceLR = tf.keras.callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.2, patience=5, min_lr=learning_rate//10)
+        reduceLR = tf.keras.callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.2, patience=5, min_lr=learning_rate//10, verbose=1)
         patience = tf.keras.callbacks.EarlyStopping(patience=es_patience)
         checkpoint = tf.keras.callbacks.ModelCheckpoint(os.path.join(os.getcwd(), 'model_best_weights.h5'), save_best_only = True, save_weights_only = True)
         wandb_callback = wandb.keras.WandbCallback(save_weights_only=True)
