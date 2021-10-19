@@ -11,13 +11,13 @@ class ViT(tf.keras.layers.Layer):
                  patch_size:int=16,
                  num_channels:int=1,
                  num_heads:int=8,
-                 transformer_layers:int=8,
+                 transformer_layers:int=12,
                  hidden_unit_factor:float=2.,
-                 mlp_head_units:List[int]=[512,64],
+                 mlp_head_units:List[int]=[256,64],
                  num_classes:int=4,
                  drop_attn:float=.2,
-                 drop_linear:float=.4,
-                 original_attn:bool=False,
+                 drop_proj:float=.2,
+                 drop_linear:float=.2,
                  ):
         super(ViT, self).__init__()
         # Parameters
@@ -29,20 +29,25 @@ class ViT(tf.keras.layers.Layer):
         self.mlp_head_units = mlp_head_units
         self.num_classes = num_classes
         self.drop_attn = drop_attn
+        self.drop_proj = drop_proj
         self.drop_linear = drop_linear
-        self.original_attn = original_attn
         self.num_patches = (self.img_size//self.patch_size)**2
         self.projection_dim = self.num_channels*self.patch_size**2
         self.hidden_units = int(hidden_unit_factor*self.projection_dim)
         # Layers
-        self.PE = PatchEncoder(self.img_size, self.patch_size, self.num_channels)
-        if self.original_attn:
-            self.TB = AttentionTransformerEncoder(self.img_size,self.patch_size,self.num_channels,self.num_heads,self.transformer_layers, self.hidden_units,self.drop_attn)
-        else:
-            self.TB = ReAttentionTransformerEncoder(self.img_size,self.patch_size,self.num_channels,self.num_heads,self.transformer_layers, self.hidden_units, self.drop_attn)
+        self.PE = PatchEncoder(self.img_size, self.patch_size, self.num_channels, self.projection_dim)
+        self.TB = AttentionTransformerEncoder(self.img_size,
+                                             self.patch_size,
+                                             self.num_channels,
+                                             self.num_heads,
+                                             self.transformer_layers,
+                                             self.projection_dim, 
+                                             self.hidden_units,
+                                             self.drop_attn,
+                                             self.drop_proj,
+                                             )
         self.MLP = tf.keras.Sequential([tf.keras.layers.LayerNormalization(epsilon=1e-6),
-                                        tf.keras.layers.Flatten(),
-                                        tf.keras.layers.Dropout(self.drop_linear)])
+                                        tf.keras.layers.GlobalAveragePooling1D()])
         for i in self.mlp_head_units:
             self.MLP.add(tf.keras.layers.Dense(i))
             self.MLP.add(tf.keras.layers.Dropout(self.drop_linear))
