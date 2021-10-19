@@ -29,6 +29,7 @@ def run_WB_experiment(WB_KEY:str,
                       learning_rate:float=0.00005,
                       weight_decay:float=0.0001,
                       label_smoothing:float=.1,
+                      es_patience:int=10,
                       seed:int=123,
                       verbose:int=1,
                       ):
@@ -105,7 +106,7 @@ def run_WB_experiment(WB_KEY:str,
     )
     # Callbacks
     reduceLR = tf.keras.callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.2, patience=1, min_lr=learning_rate//10)
-    patience = tf.keras.callbacks.EarlyStopping(patience=5),
+    patience = tf.keras.callbacks.EarlyStopping(patience=es_patience),
     wandb_callback = wandb.keras.WandbCallback()
     # Model fit
     history = model.fit(
@@ -145,6 +146,7 @@ def run_WB_CV_experiment(WB_KEY:str,
                       epochs:int=8,
                       learning_rate:float=0.00005,
                       weight_decay:float=0.0001,
+                      es_patience:int=10,
                       label_smoothing:float=.1,
                       seed:int=123,
                       verbose:int=1,
@@ -226,7 +228,7 @@ def run_WB_CV_experiment(WB_KEY:str,
         )
         # Callbacks
         reduceLR = tf.keras.callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.2, patience=5, min_lr=learning_rate//10)
-        patience = tf.keras.callbacks.EarlyStopping(patience=2)
+        patience = tf.keras.callbacks.EarlyStopping(patience=es_patience)
         checkpoint = tf.keras.callbacks.ModelCheckpoint(os.path.join(os.getcwd(), 'model_best_weights.h5'), save_best_only = True, save_weights_only = True)
         wandb_callback = wandb.keras.WandbCallback(save_weights_only=True)
         # Model fit
