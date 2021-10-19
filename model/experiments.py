@@ -24,7 +24,7 @@ def run_WB_experiment(WB_KEY:str,
                       model:tf.keras.Model,
                       ImageDataGenerator_config:Dict,
                       flow_from_dataframe_config:Dict,
-                      path:str="/content/OCT2017 /train/",
+                      path:List[str]=["/content/train/","/content/test/"],
                       epochs:int=10,
                       pct_split:List[float] = [.8,.2,.1],
                       learning_rate:float=0.00005,
@@ -38,7 +38,10 @@ def run_WB_experiment(WB_KEY:str,
     assert len(tf.config.list_physical_devices('GPU'))>0, f"No GPU available. Check system settings."
 
     # Gather data
-    df = get_df(path)
+    list_df = []
+    for p in path:
+        list_df.append(get_df(p))
+    df = pd.concat([list_df], axis = 0)
     train_data, test_data, train_label, test_label = train_test_split(df['x_col'], df['y_col'], test_size = pct_split[-1], random_state = seed)
     train_data, val_data, train_label, val_label = train_test_split(train_data, train_label, test_size = pct_split[-2], random_state = seed)
     train_df = pd.concat([train_data, train_label], axis = 1)
@@ -92,6 +95,8 @@ def run_WB_experiment(WB_KEY:str,
     train_steps_per_epoch = len(train_generator)
     val_steps_per_epoch = len(val_generator)
     test_steps_per_epoch = len(test_generator)
+    # Save initial weights
+    model.load_weights(os.path.join(os.getcwd(), 'model_weights.h5'))
     # Credentials
     wandb.init(project=WB_PROJECT, entity=WB_ENTITY, group = WB_GROUP)
     # Model compile
@@ -103,12 +108,16 @@ def run_WB_experiment(WB_KEY:str,
         loss=tf.keras.losses.CategoricalCrossentropy(from_logits=True, label_smoothing = label_smoothing),
         metrics=[
             tf.keras.metrics.CategoricalAccuracy(name="accuracy"),
+            precision,
+            recall,
+            f1,
         ],
     )
     # Callbacks
-    reduceLR = tf.keras.callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.2, patience=1, min_lr=learning_rate//10)
-    patience = tf.keras.callbacks.EarlyStopping(patience=es_patience),
-    wandb_callback = wandb.keras.WandbCallback()
+    reduceLR = tf.keras.callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.2, patience=2, min_lr=learning_rate//10)
+    patience = tf.keras.callbacks.EarlyStopping(patience=es_patience)
+    checkpoint = tf.keras.callbacks.ModelCheckpoint(os.path.join(os.getcwd(), 'model_best_weights.h5'), save_best_only = True, save_weights_only = True)
+    wandb_callback = wandb.keras.WandbCallback(save_weights_only=True)
     # Model fit
     history = model.fit(
         train_generator,
@@ -116,22 +125,17 @@ def run_WB_experiment(WB_KEY:str,
         epochs = epochs,
         validation_data=val_generator,
         validation_steps = val_steps_per_epoch,
-        callbacks=[reduceLR, patience, wandb_callback],
+        callbacks=[reduceLR, patience, checkpoint, wandb_callback],
         verbose = verbose,
     )
     # Evaluation
+    model.load_weights(os.path.join(os.getcwd(), 'model_best_weights.h5'))
     results = model.evaluate(test_generator, steps = test_steps_per_epoch, verbose = 0)
     print("Test metrics:",{k:v for k,v in zip(model.metrics_names, results)})
-    wandb.log({'test_loss':results[0], 'test_accuracy':results[1]})
-    # Save model
-    try:
-        model.save('/tmp/model_checkpoint.h5')
-    except:
-        print(f"Model could not be saved.")
+    wandb.log({("test_"+k):v for k,v in zip(model.metrics_names, results)})
     # Clear memory
     tf.keras.backend.clear_session()
     wandb.finish()
-    return history
 
 
 def run_WB_CV_experiment(WB_KEY:str,
