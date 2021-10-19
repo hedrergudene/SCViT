@@ -225,6 +225,9 @@ def run_WB_CV_experiment(WB_KEY:str,
             loss=tf.keras.losses.CategoricalCrossentropy(from_logits=True, label_smoothing = label_smoothing),
             metrics=[
                 tf.keras.metrics.CategoricalAccuracy(name="accuracy"),
+                precision,
+                recall,
+                f1,
             ],
         )
         # Callbacks
@@ -239,7 +242,6 @@ def run_WB_CV_experiment(WB_KEY:str,
             epochs = epochs,
             validation_data=val_generator,
             validation_steps = val_steps_per_epoch,
-            metrics = ['accuracy', precision, recall, f1]
             callbacks=[reduceLR, patience, checkpoint, wandb_callback],
             verbose = verbose,
         )
