@@ -104,8 +104,8 @@ def run_WB_experiment(WB_KEY:str,
         ],
     )
     # Callbacks
-    reduceLR = tf.keras.callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.2, patience=5, min_lr=learning_rate//10)
-    patience = tf.keras.callbacks.EarlyStopping(patience=2),
+    reduceLR = tf.keras.callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.2, patience=1, min_lr=learning_rate//10)
+    patience = tf.keras.callbacks.EarlyStopping(patience=5),
     wandb_callback = wandb.keras.WandbCallback()
     # Model fit
     history = model.fit(
