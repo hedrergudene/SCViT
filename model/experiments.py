@@ -6,7 +6,7 @@ from typing import Dict, List
 import os
 import pandas as pd
 from sklearn.model_selection import StratifiedKFold
-from HViT_classification.model.custom_metrics import f1, precision, recall
+from HViT_classification.model.custom_metrics import f1
 
 def get_df(path:str):
     labels = os.listdir(path)
