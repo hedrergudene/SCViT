@@ -86,8 +86,7 @@ class Resampling(tf.keras.layers.Layer):
             self.position_embedding = tf.keras.layers.Embedding(input_dim=self.num_patches[-1], output_dim=self.projection_dim[-1])
             self.linear = tf.keras.layers.Dense(self.projection_dim[-1])
         elif self.resampling_type=='conv':
-            assert (projection_dim is None) or (int(np.sqrt(projection_dim))==np.sqrt(projection_dim)), f"If provided, projection dim\
-                has to be a perfect square with resampling_type=='conv'."
+            assert (projection_dim is None) or (int(np.sqrt(projection_dim//self.num_channels))==np.sqrt(projection_dim//self.num_channels)), f"If provided, projection dim has to be a perfect square (per channel) with resampling_type=='conv'."
             self.projection_dim = [projection_dim if projection_dim is not None else self.num_channels*patch**2 for patch in self.patch_size]
             self.conv = tf.keras.layers.Conv2D(self.num_patches[-1], self.pool_size//2, strides = self.pool_size//2, padding = 'same')
             self.linear = tf.keras.layers.Dense(self.projection_dim[-1])
