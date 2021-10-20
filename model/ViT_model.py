@@ -199,6 +199,7 @@ class HViT(tf.keras.layers.Layer):
                         'Encoder':self.Encoder,
                         'Encoder_RS':self.Encoder_RS,
                         'MLP':self.MLP,
+                        'bias_initializer':self.bias_initializer,
                         })
         return config
 
