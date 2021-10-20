@@ -3,6 +3,7 @@ import keras
 from keras import backend as K
 
 def f1(y_true, y_pred):
+    y_pred = tf.nn.softmax(y_pred, axis = 1)
     y_pred = K.round(y_pred)
     tp = K.sum(K.cast(y_true*y_pred, 'float'), axis=0)
     # tn = K.sum(K.cast((1-y_true)*(1-y_pred), 'float'), axis=0)
