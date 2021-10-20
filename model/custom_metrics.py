@@ -39,6 +39,6 @@ def f1(y_true, y_pred):
     Computes the recall, a metric for multi-label classification of
     how many relevant items are selected.
     """
-    precision = precision(y_true, y_pred)
-    recall = recall(y_true, y_pred)
-    return 2*((precision*recall)/(precision+recall+K.epsilon()))
+    pr = precision(y_true, y_pred)
+    rec = recall(y_true, y_pred)
+    return 2*((pr*rec)/(pr+rec+K.epsilon()))
