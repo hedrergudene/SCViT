@@ -172,7 +172,7 @@ class HViT(tf.keras.layers.Layer):
         for i in self.mlp_head_units:
             self.MLP.add(tf.keras.layers.Dense(i))
             self.MLP.add(tf.keras.layers.Dropout(self.drop_linear))
-        self.MLP.add(tf.keras.layers.Dense(self.num_classes, bias_initializer = self.bias_initializer))
+        self.MLP.add(tf.keras.layers.Dense(self.num_classes, weights = self.bias_initializer))
 
 
     def get_config(self):
