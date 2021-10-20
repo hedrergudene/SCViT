@@ -80,6 +80,7 @@ class HViT(tf.keras.layers.Layer):
                  drop_linear:float=.4,
                  resampling_type:str='standard',
                  original_attn:bool=True,
+                 bias_initializer="zeros",
                  ):
         super(HViT, self).__init__()
         #Validations
@@ -104,6 +105,7 @@ class HViT(tf.keras.layers.Layer):
         self.num_patches = [(self.img_size//patch)**2 for patch in self.patch_size]
         self.projection_dim = [projection_dim if projection_dim is not None else self.num_channels*patch**2 for patch in self.patch_size]
         self.hidden_units = [int(hidden_unit_factor*proj) for proj in self.projection_dim]
+        self.bias_initializer = bias_initializer
         # Layers
         ##Positional Encoding
         self.PE = PatchEncoder(self.img_size, self.patch_size[0], self.num_channels, self.projection_dim[0])
@@ -170,7 +172,7 @@ class HViT(tf.keras.layers.Layer):
         for i in self.mlp_head_units:
             self.MLP.add(tf.keras.layers.Dense(i))
             self.MLP.add(tf.keras.layers.Dropout(self.drop_linear))
-        self.MLP.add(tf.keras.layers.Dense(self.num_classes))
+        self.MLP.add(tf.keras.layers.Dense(self.num_classes, bias_initializer = self.bias_initializer))
 
 
     def get_config(self):
