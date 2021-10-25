@@ -48,7 +48,7 @@ def unpatch(x, num_channels):
 
 def resampling(encoded_patches, img_size:int=128, patch_size:List[int]=[16,8], num_channels:int=3):
     num_patch = (img_size//patch_size[1])**2
-    proj_dim = num_channels*patch_size[1]**2
+    proj_dim = int(encoded_patches.shape.as_list()[-1]*(patch_size[1]/patch_size[0]))
     original_image = unpatch(unflatten(encoded_patches, num_channels), num_channels)
     new_patches = patches(tf.squeeze(original_image, axis=1), patch_size[1])
     new_patches_flattened = tf.reshape(new_patches, shape=[-1, num_patch, proj_dim])
@@ -71,7 +71,7 @@ class Resampling(tf.keras.layers.Layer):
         self.img_size = img_size
         self.patch_size = patch_size
         self.num_patches = [(self.img_size//patch)**2 for patch in self.patch_size]
-        self.pool_size = self.num_patches[0]//self.num_patches[1]
+        self.pool_size = self.num_patches[1]//self.num_patches[0]
         self.num_channels = num_channels
         self.resampling_type = resampling_type
         # Layers
@@ -92,31 +92,6 @@ class Resampling(tf.keras.layers.Layer):
             self.linear = tf.keras.layers.Dense(self.projection_dim[-1])
             self.positions = tf.range(start=0, limit=self.num_patches[-1], delta=1)
             self.position_embedding = tf.keras.layers.Embedding(input_dim=self.num_patches[-1], output_dim=self.projection_dim[-1])
-          
-          
-    def get_config(self):
-        config = super(Resampling, self).get_config().copy()
-        config.update({
-                        'img_size':self.img_size,
-                        'patch_size':self.patch_size,
-                        'num_patches':self.num_patches,
-                        'num_channels':self.num_channels,
-                        'pool_size':self.pool_size,
-                        'resampling_type':self.resampling_type,
-                        'projection_dim':self.projection_dim,
-                        'positions':self.positions,
-                        'position_embedding':self.position_embedding,
-                        })
-        if self.resampling_type in ['standard']:
-                  config.update({
-                        'linear':self.linear,
-                        })
-        if self.resampling_type in ['conv']:
-                  config.update({
-                        'linear':self.linear,
-                        'conv':self.conv,
-                        })
-        return config
 
     def call(self, encoded:tf.Tensor):
         if self.resampling_type=='max':
@@ -144,6 +119,7 @@ class Resampling(tf.keras.layers.Layer):
         elif self.resampling_type=='standard':
             encoded = resampling(encoded, self.img_size, self.patch_size, self.num_channels)
             encoded = self.linear(encoded) + self.position_embedding(self.positions)
+            return encoded
         elif self.resampling_type=='conv':
             encoded = unflatten(encoded, self.num_channels)
             encoded = tf.transpose(encoded, [0,4,2,3,1])
