@@ -394,3 +394,30 @@ class ReAttentionTransformerEncoder(tf.keras.layers.Layer):
             encoded_patches = self.FF[i](encoded_patches) + encoded_patches
             encoded_patches = self.LN2[i](encoded_patches)
         return encoded_patches
+
+## Skip connections
+class SkipConnection(tf.keras.layers.Layer):
+    def __init__(self,
+                 img_size,
+                 patch_size,
+                 num_channels:int=3,
+                 projection_dim:int=None,
+                 num_heads:int=8,
+                 attn_drop:float=.2,
+                 ):
+        super(SkipConnection, self).__init__()
+        self.img_size = img_size
+        self.patch_size = patch_size
+        self.num_heads = num_heads
+        self.num_channels = num_channels
+        self.attn_drop = attn_drop
+        self.num_patches = (self.img_size//self.patch_size)**2
+        if projection_dim is not None:
+            self.projection_dim = projection_dim
+        else:
+            self.projection_dim = self.num_channels*self.patch_size**2
+        self.Attn = tf.keras.layers.MultiHeadAttention(self.num_heads, self.projection_dim, self.projection_dim, self.attn_drop)
+
+        
+    def call(self, q, v):
+        return self.Attn(q,v)
