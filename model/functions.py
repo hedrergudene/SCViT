@@ -62,7 +62,7 @@ class Resampling(tf.keras.layers.Layer):
                  patch_size:List[int]=[8,16],
                  num_channels:int=1,
                  projection_dim:int=256,
-                 resampling_type:str='cnn',
+                 resampling_type:str='conv',
                  ):
         super(Resampling, self).__init__()
         # Validation
