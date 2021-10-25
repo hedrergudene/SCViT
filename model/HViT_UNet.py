@@ -32,7 +32,6 @@ class HViT_UNet(tf.keras.layers.Layer):
         self.size_bottleneck = size_bottleneck
         self.drop_attn = drop_attn
         self.drop_proj = drop_proj
-        self.drop_linear = drop_linear
         self.resampling_type = resampling_type
         self.num_patches = [(self.img_size//patch)**2 for patch in self.patch_size]
         if projection_dim is not None:
@@ -43,6 +42,7 @@ class HViT_UNet(tf.keras.layers.Layer):
         # Layers
         ## Pre-Post processing
         self.preprocessing = tf.keras.layers.Conv2D(self.num_channels, 7, 1, padding = 'same')
+        self.final_linear = tf.keras.layers.Dense(self.num_channels*self.patch_size[0]**2)
         self.postprocessing = tf.keras.layers.Conv2D(self.num_channels, 7, 1, padding = 'same')
         ##Positional Encoding
         self.PE = PatchEncoder(self.img_size, self.patch_size[0], self.num_channels, self.projection_dim[0])
@@ -92,7 +92,7 @@ class HViT_UNet(tf.keras.layers.Layer):
                                                 self.patch_size_rev[i:i+2],
                                                 self.num_channels,
                                                 self.projection_dim[len(patch_size)-(i+2)],
-                                                self.resampling_type,
+                                                'standard',
                                                 )
                             )
             self.Decoder.append(
@@ -141,6 +141,7 @@ class HViT_UNet(tf.keras.layers.Layer):
             encoded = self.Decoder[i](encoded)
             encoded = self.SkipConnections[i](encoded_list[i], encoded)
         # Return original image
+        encoded = self.final_linear(encoded)
         Y = X + tf.squeeze(unpatch(unflatten(encoded, self.num_channels), self.num_channels), axis = 1)
         output = self.postprocessing(Y)
         return output
