@@ -71,7 +71,7 @@ class Resampling(tf.keras.layers.Layer):
         self.img_size = img_size
         self.patch_size = patch_size
         self.num_patches = [(self.img_size//patch)**2 for patch in self.patch_size]
-        self.pool_size = self.num_patches[1]//self.num_patches[0]
+        self.pool_size = self.num_patches[0]//self.num_patches[1]
         self.num_channels = num_channels
         self.resampling_type = resampling_type
         # Layers
