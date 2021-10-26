@@ -78,7 +78,7 @@ class HViT(tf.keras.layers.Layer):
                  drop_attn:float=.2,
                  drop_proj:float=.2,
                  drop_linear:float=.4,
-                 resampling_type:str='standard',
+                 resampling_type:str='conv',
                  original_attn:bool=True,
                  bias_initializer=None,
                  ):
