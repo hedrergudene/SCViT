@@ -142,6 +142,6 @@ class HViT_UNet(tf.keras.layers.Layer):
             encoded = self.SkipConnections[i](encoded_list[i], encoded)
         # Return original image
         encoded = self.final_linear(encoded)
-        Y = X + tf.squeeze(unpatch(unflatten(encoded, self.num_channels), self.num_channels), axis = 1)
+        Y = X_prep + tf.squeeze(unpatch(unflatten(encoded, self.num_channels), self.num_channels), axis = 1)
         output = self.postprocessing(Y)
         return output
