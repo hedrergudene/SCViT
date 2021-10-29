@@ -404,8 +404,10 @@ class SkipConnection(tf.keras.layers.Layer):
                  projection_dim:int=None,
                  num_heads:int=8,
                  attn_drop:float=.2,
+                 type:str = 'resnet',
                  ):
         super(SkipConnection, self).__init__()
+        assert type in ['attn', 'resnet', 'concat'], f"Skip connection type should be either 'attn', 'resnet' or 'concat'."
         self.img_size = img_size
         self.patch_size = patch_size
         self.num_heads = num_heads
@@ -416,8 +418,17 @@ class SkipConnection(tf.keras.layers.Layer):
             self.projection_dim = projection_dim
         else:
             self.projection_dim = self.num_channels*self.patch_size**2
-        self.Attn = tf.keras.layers.MultiHeadAttention(self.num_heads, self.projection_dim, self.projection_dim, self.attn_drop)
+        self.type = type
+        if self.type=='attn':
+            self.Attn = tf.keras.layers.MultiHeadAttention(self.num_heads, self.projection_dim, self.projection_dim, self.attn_drop)
+        elif self.type=='concat':
+            self.linear = tf.keras.layers.Dense(self.projection_dim)
 
         
     def call(self, q, v):
-        return self.Attn(q,v)
+        if self.type=='attn':
+            return self.Attn(q,v)
+        elif self.type=='resnet':
+            return q+v
+        else:
+            return self.linear(tf.concat([q,v], axis = -1))

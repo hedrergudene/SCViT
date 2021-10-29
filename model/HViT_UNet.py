@@ -16,6 +16,7 @@ class HViT_UNet(tf.keras.layers.Layer):
                  drop_attn:float=.2,
                  drop_proj:float=.2,
                  resampling_type:str='conv',
+                 skip_type:str='resnet',
                  ):
         super(HViT_UNet, self).__init__()
         #Validations
@@ -33,6 +34,7 @@ class HViT_UNet(tf.keras.layers.Layer):
         self.drop_attn = drop_attn
         self.drop_proj = drop_proj
         self.resampling_type = resampling_type
+        self.skip_type = skip_type
         self.num_patches = [(self.img_size//patch)**2 for patch in self.patch_size]
         if projection_dim is not None:
             self.projection_dim = [projection_dim for _ in self.patch_size]
@@ -118,6 +120,7 @@ class HViT_UNet(tf.keras.layers.Layer):
                                                        self.projection_dim[len(patch_size)-(i+2)],
                                                        self.num_heads,
                                                        self.drop_attn,
+                                                       self.skip_type,
                                                        )
                                         )
 
