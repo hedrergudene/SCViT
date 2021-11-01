@@ -259,7 +259,9 @@ class Upsampling(torch.nn.Module):
                 DoubleConv(self.num_patches[1]),
             )
 
-    def forward(self, encoded_patches):
+    def forward(self,
+                encoded_patches:torch.Tensor,
+                ):
         if self.upsampling_type=='conv':
             encoded_patches = torch.transpose(unflatten(encoded_patches, self.num_channels), 2, 1)
             encoded_patches = torch.transpose(torch.stack([self.sequence(y) for y in encoded_patches], dim=0), 2, 1)
@@ -310,28 +312,31 @@ class Downsampling(torch.nn.Module):
                 DoubleConv(self.num_patches[1]),
             )
 
-    def forward(self, encoded_patches):
+    def forward(self,
+                decoded_patches:torch.Tensor,
+                encoded_skip:torch.Tensor=None,
+                ):
         if self.downsampling_type=='conv':
-            encoded_patches = torch.transpose(unflatten(encoded_patches, self.num_channels), 2, 1)
-            encoded_patches = torch.transpose(torch.stack([self.sequence(y) for y in encoded_patches], dim=0), 2, 1)
-            encoded_patches = torch.flatten(encoded_patches, start_dim=2, end_dim=-1)
-            encoded_patches = self.proj(encoded_patches)
-            return encoded_patches
+            decoded_patches = torch.transpose(unflatten(decoded_patches, self.num_channels), 2, 1)
+            decoded_patches = torch.transpose(torch.stack([self.sequence(y) for y in decoded_patches], dim=0), 2, 1)
+            decoded_patches = torch.flatten(decoded_patches, start_dim=2, end_dim=-1)
+            decoded_patches = self.proj(decoded_patches)
+            return decoded_patches
         elif self.downsampling_type=='bilinear':
             # Unflatten
-            encoded_patches = unflatten(encoded_patches, self.num_channels)
-            ps = encoded_patches.shape[-1]
+            decoded_patches = unflatten(decoded_patches, self.num_channels)
+            ps = decoded_patches.shape[-1]
             # Bilinear upsampling
-            encoded_patches = torch.stack([self.bil(y) for y in encoded_patches], dim=0)
-            encoded_patches = encoded_patches.permute((0,1,3,4,2))
+            decoded_patches = torch.stack([self.bil(y) for y in decoded_patches], dim=0)
+            decoded_patches = decoded_patches.permute((0,1,3,4,2))
             # Create subpatches
-            encoded_patches = encoded_patches.unfold(-3, ps, ps).unfold(-3, ps, ps)
+            decoded_patches = decoded_patches.unfold(-3, ps, ps).unfold(-3, ps, ps)
             # Flat to encode
-            encoded_patches = torch.flatten(encoded_patches, start_dim=1, end_dim=3)
+            decoded_patches = torch.flatten(decoded_patches, start_dim=1, end_dim=3)
             # Permute channels and patches to apply double conv
-            encoded_patches = encoded_patches.permute((0,2,1,3,4))
-            encoded_patches = torch.stack([self.sequence(y) for y in encoded_patches], dim=0)
-            encoded_patches = encoded_patches.permute((0,2,1,3,4))
+            decoded_patches = decoded_patches.permute((0,2,1,3,4))
+            decoded_patches = torch.stack([self.sequence(y) for y in decoded_patches], dim=0)
+            decoded_patches = decoded_patches.permute((0,2,1,3,4))
             # Final flat of patches
-            encoded_patches = torch.flatten(encoded_patches, start_dim=-3, end_dim=-1)
-            return encoded_patches
+            decoded_patches = torch.flatten(decoded_patches, start_dim=-3, end_dim=-1)
+            return decoded_patches
