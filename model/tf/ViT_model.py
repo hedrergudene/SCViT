@@ -1,7 +1,7 @@
 import tensorflow as tf
 import numpy as np
 from typing import List
-from HViT_classification.model.functions import *
+from HViT_classification.model.tf.functions import *
 
 # Models
 ## Original ViT
