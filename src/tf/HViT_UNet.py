@@ -1,7 +1,7 @@
 import tensorflow as tf
 import numpy as np
 from typing import List
-from HViT_classification.model.functions import *
+from .functions import *
 
 class HViT_UNet(tf.keras.layers.Layer):
     def __init__(self,
