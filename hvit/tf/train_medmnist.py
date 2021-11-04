@@ -5,9 +5,9 @@ from typing import Dict, List
 import os
 import numpy as np
 from sklearn.model_selection import StratifiedKFold
-from hvit.tf.custom_metrics import f1
-from hvit.medmnist.info import INFO
-import hvit.medmnist.dataset_without_pytorch as mdn
+from .custom_metrics import f1
+from .info import INFO
+import hvit.tf.dataset_without_pytorch as mdn
 import cv2
 
 import ssl

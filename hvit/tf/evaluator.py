@@ -6,7 +6,7 @@ from collections import namedtuple
 from sklearn.metrics import roc_auc_score
 from sklearn.metrics import accuracy_score
 
-from medmnist.info import INFO, DEFAULT_ROOT
+from .info import INFO, DEFAULT_ROOT
 
 Metrics = namedtuple("Metrics", ["AUC", "ACC"])
 

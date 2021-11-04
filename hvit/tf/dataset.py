@@ -2,7 +2,7 @@ import os
 import numpy as np
 from PIL import Image
 from torch.utils.data import Dataset
-from medmnist.info import INFO, HOMEPAGE, DEFAULT_ROOT
+from .info import INFO, HOMEPAGE, DEFAULT_ROOT
 
 
 class MedMNIST(Dataset):
