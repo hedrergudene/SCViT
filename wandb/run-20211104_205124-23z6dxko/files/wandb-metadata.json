@@ -1,0 +1,28 @@
+{
+    "os": "Linux-4.15.0-159-generic-x86_64-with-Ubuntu-18.04-bionic",
+    "python": "3.6.9",
+    "heartbeatAt": "2021-11-04T20:51:26.786768",
+    "startedAt": "2021-11-04T20:51:24.990033",
+    "docker": null,
+    "gpu": "NVIDIA GeForce RTX 2060",
+    "gpu_count": 1,
+    "cpu_count": 6,
+    "cuda": null,
+    "args": [
+        "--ip=127.0.0.1",
+        "--stdin=9018",
+        "--control=9016",
+        "--hb=9015",
+        "--Session.signature_scheme=\"hmac-sha256\"",
+        "--Session.key=b\"bcbc37e7-2939-42e6-8a94-709e49c20b08\"",
+        "--shell=9017",
+        "--transport=\"tcp\"",
+        "--iopub=9019",
+        "--f=/tmp/tmp-8814MCFY55sGDQkt.json"
+    ],
+    "state": "running",
+    "program": "<python with no main file>",
+    "host": "benayas-server",
+    "username": "benayas",
+    "executable": "/usr/bin/python3"
+}

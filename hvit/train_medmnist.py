@@ -1,17 +1,14 @@
 import tensorflow as tf
 import tensorflow_addons as tfa
 import wandb
-from sklearn.model_selection import KFold, train_test_split
 from typing import Dict, List
 import os
-import pandas as pd
 import numpy as np
 from sklearn.model_selection import StratifiedKFold
-from medmnist import INFO, Evaluator
-from tf.custom_metrics import f1
-from tqdm import tqdm
-import medmnist.dataset_without_pytorch as mdn
-from medmnist.dataset_without_pytorch import get_loader
+from hvit.medmnist.info import INFO
+from hvit.tf.custom_metrics import f1
+import hvit.medmnist.dataset_without_pytorch as mdn
+import cv2
 
 import ssl
 ssl._create_default_https_context = ssl._create_unverified_context
@@ -30,6 +27,7 @@ def run_WB_experiment(WB_KEY:str,
                       label_smoothing:float=.1,
                       es_patience:int=10,
                       verbose:int=1,
+                      resize:int = None,
                       ):
     # Check for GPU:
     assert len(tf.config.list_physical_devices('GPU'))>0, f"No GPU available. Check system settings."
@@ -45,18 +43,24 @@ def run_WB_experiment(WB_KEY:str,
     # load train Data
     train_dataset = DataClass(split='train', download=True)
     x_train = train_dataset.imgs
+    if resize is not None:
+        x_train = np.stack([cv2.resize(img, (resize,resize), interpolation = cv2.INTER_AREA) for img in x_train])
     y_train = train_dataset.labels
-    print(f'X train {x_train.shape} | Y train {y_train.shape}')
+    print(f'X train {x_train.shape} | Y train {y_train.shape}')  
 
     # load val Data
     train_dataset = DataClass(split='val', download=True)
     x_val = train_dataset.imgs
+    if resize is not None:
+        x_val = np.stack([cv2.resize(img, (resize,resize), interpolation = cv2.INTER_AREA) for img in x_val])
     y_val = train_dataset.labels
     print(f'X train {x_val.shape} | Y train {y_val.shape}')
 
     # load test Data
     train_dataset = DataClass(split='test', download=True)
     x_test = train_dataset.imgs
+    if resize is not None:
+        x_test = np.stack([cv2.resize(img, (resize,resize), interpolation = cv2.INTER_AREA) for img in x_test])
     y_test = train_dataset.labels
     print(f'X train {x_test.shape} | Y train {y_test.shape}')
 
@@ -95,7 +99,7 @@ def run_WB_experiment(WB_KEY:str,
     test_steps_per_epoch = len(test_generator)
 
     # Save initial weights
-    model.load_weights(os.path.join(os.getcwd(), 'model_weights.h5'))
+    #model.load_weights(os.path.join(os.getcwd(), 'model_weights.h5'))
 
     # Credentials
     wandb.init(project=WB_PROJECT, entity=WB_ENTITY, group = WB_GROUP)
@@ -107,7 +111,7 @@ def run_WB_experiment(WB_KEY:str,
 
     if task == 'multi-class':
         loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True)
-        metrics = ['accuracy','precision','recall','f1']
+        metrics = ['accuracy',f1]
     if task == 'binary-class':
         loss=tf.keras.losses.BinaryCrossentropy(from_logits=True, label_smoothing = label_smoothing)
         metrics = ['accuracy','auc']
@@ -236,8 +240,6 @@ def run_WB_CV_experiment(WB_KEY:str,
             loss=tf.keras.losses.CategoricalCrossentropy(from_logits=True, label_smoothing = label_smoothing),
             metrics=[
                 tf.keras.metrics.CategoricalAccuracy(name="accuracy"),
-                precision,
-                recall,
                 f1,
             ],
         )
