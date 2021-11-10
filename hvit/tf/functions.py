@@ -6,25 +6,13 @@ from typing import List
 def patches(X:tf.Tensor,
           patch_size:int,
           ):
-
-    def patches_2d(X:tf.Tensor):
-        h, w = X.shape.as_list()
-        X_middle = tf.stack(tf.split(X,h//patch_size, axis = 0), axis = 0)
-        X_final = tf.map_fn(fn=lambda y: tf.stack(tf.split(y,w//patch_size, axis = 1), axis = 0), elems = X_middle)
-        X_final = tf.reshape(X_final, shape=[-1,patch_size,patch_size])
-        return X_final
-
-    if len(X.shape)==5:
-        X = tf.squeeze(X, axis=1)
-    _, h, w, _ = X.shape.as_list()
-    assert h%patch_size==0, f"Patch size must divide images height"
-    assert w%patch_size==0, f"Patch size must divide images width"
-    X = tf.transpose(X, perm=[0,3,1,2])
-    patches_tf = tf.map_fn(fn=lambda y: tf.map_fn(fn = lambda z: patches_2d(z), elems = y),
-                           elems = X,
-                           )
-    patches_tf = tf.transpose(patches_tf, [0,2,3,4,1])
-    return patches_tf
+    num_patches = (X.shape.as_list()[1]//patch_size)**2
+    X = tf.image.extract_patches(images=X,
+                           sizes=[1, patch_size, patch_size, 1],
+                           strides=[1, patch_size, patch_size, 1],
+                           rates=[1, 1, 1, 1],
+                           padding='VALID')
+    return  tf.reshape(X, (-1, num_patches, X.shape.as_list()[-1]))
 
 def unflatten(flattened, num_channels):
     if len(flattened.shape)==2:
@@ -47,12 +35,9 @@ def unpatch(x, num_channels):
     return restored_images
 
 def resampling(encoded_patches, img_size:int=128, patch_size:List[int]=[16,8], num_channels:int=3):
-    num_patch = (img_size//patch_size[1])**2
-    proj_dim = int(encoded_patches.shape.as_list()[-1]*(patch_size[1]/patch_size[0])**2)
     original_image = unpatch(unflatten(encoded_patches, num_channels), num_channels)
     new_patches = patches(tf.squeeze(original_image, axis=1), patch_size[1])
-    new_patches_flattened = tf.reshape(new_patches, shape=[-1, num_patch, proj_dim])
-    return new_patches_flattened
+    return new_patches
 
 # Layers
 ## Resampling
@@ -88,7 +73,7 @@ class Resampling(tf.keras.layers.Layer):
         elif self.resampling_type=='conv':
             assert (projection_dim is None) or (int(np.sqrt(projection_dim//self.num_channels))==np.sqrt(projection_dim//self.num_channels)), f"If provided, projection dim has to be a perfect square (per channel) with resampling_type=='conv'."
             self.projection_dim = [projection_dim if projection_dim is not None else self.num_channels*patch**2 for patch in self.patch_size]
-            self.conv = tf.keras.layers.Conv2D(self.num_patches[-1], self.pool_size//2, strides = self.pool_size//2, padding = 'same')
+            self.conv = tf.keras.layers.Conv2D(self.num_channels*self.num_patches[-1], self.pool_size//2, strides = self.pool_size//2, padding = 'same')
             self.linear = tf.keras.layers.Dense(self.projection_dim[-1])
             self.positions = tf.range(start=0, limit=self.num_patches[-1], delta=1)
             self.position_embedding = tf.keras.layers.Embedding(input_dim=self.num_patches[-1], output_dim=self.projection_dim[-1])
@@ -122,10 +107,11 @@ class Resampling(tf.keras.layers.Layer):
             return encoded
         elif self.resampling_type=='conv':
             encoded = unflatten(encoded, self.num_channels)
-            encoded = tf.transpose(encoded, [0,4,2,3,1])
-            encoded = tf.map_fn(lambda y: self.conv(y), elems = encoded)
-            encoded = tf.transpose(encoded, [0,4,2,3,1])
-            encoded = tf.reshape(encoded, [-1, self.num_patches[-1], self.projection_dim[0]//4])
+            encoded = tf.reshape(tf.transpose(encoded, [0,2,3,1,4]), [-1, self.patch_size[0], self.patch_size[0], self.num_patches[0]*self.num_channels])
+            encoded = self.conv(encoded)
+            encoded = tf.reshape(encoded, [-1, 2*self.patch_size[0]//self.pool_size, 2*self.patch_size[0]//self.pool_size, self.num_patches[-1], self.num_channels])
+            encoded = tf.transpose(encoded, [0,3,1,2,4])
+            encoded = tf.reshape(encoded, [-1, self.num_patches[-1], 4*self.num_channels*(self.patch_size[0]//self.pool_size)**2])
             encoded = self.linear(encoded) + self.position_embedding(self.positions)
             return encoded
 
@@ -162,7 +148,7 @@ class PatchEncoder(tf.keras.layers.Layer):
         return config
 
     def call(self, X:tf.Tensor):
-        X = tf.reshape(patches(X, self.patch_size), [-1, self.num_patches, self.num_channels*self.patch_size**2])
+        X = patches(X, self.patch_size)
         positions = tf.range(start=0, limit=self.num_patches, delta=1)
         encoded = self.projection(X) + self.position_embedding(positions)
         return encoded
