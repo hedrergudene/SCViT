@@ -111,7 +111,6 @@ class Resampling(tf.keras.layers.Layer):
             self.linear = tf.keras.layers.Dense(self.projection_dim[-1])
             self.positions = tf.range(start=0, limit=self.num_patches[-1], delta=1)
             self.position_embedding = tf.keras.layers.Embedding(input_dim=self.num_patches[-1], output_dim=self.projection_dim[-1])
-            self.position_embedding = tf.keras.layers.Embedding(input_dim=self.num_patches[-1], output_dim=self.projection_dim)
         elif self.resampling_type=='standard':
             self.projection_dim = [projection_dim if projection_dim is not None else self.num_channels*patch**2 for patch in self.patch_size]
             self.positions = tf.range(start=0, limit=self.num_patches[-1], delta=1)
