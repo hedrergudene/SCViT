@@ -73,6 +73,7 @@ class Resampling(tf.keras.layers.Layer):
         elif self.resampling_type=='conv':
             assert (projection_dim is None) or (int(np.sqrt(projection_dim//self.num_channels))==np.sqrt(projection_dim//self.num_channels)), f"If provided, projection dim has to be a perfect square (per channel) with resampling_type=='conv'."
             self.projection_dim = [projection_dim if projection_dim is not None else self.num_channels*patch**2 for patch in self.patch_size]
+            self.ps = [int(np.sqrt(proj//self.num_channels)) for proj in self.projection_dim]
             self.conv = tf.keras.layers.Conv2D(self.num_channels*self.num_patches[-1], self.pool_size//2, strides = self.pool_size//2, padding = 'same')
             self.linear = tf.keras.layers.Dense(self.projection_dim[-1])
             self.positions = tf.range(start=0, limit=self.num_patches[-1], delta=1)
@@ -107,11 +108,12 @@ class Resampling(tf.keras.layers.Layer):
             return encoded
         elif self.resampling_type=='conv':
             encoded = unflatten(encoded, self.num_channels)
-            encoded = tf.reshape(tf.transpose(encoded, [0,2,3,1,4]), [-1, self.patch_size[0], self.patch_size[0], self.num_patches[0]*self.num_channels])
+            encoded = tf.transpose(encoded, [0,2,3,1,4])
+            encoded = tf.reshape(encoded, [-1, self.ps[0], self.ps[0], self.num_patches[0]*self.num_channels])
             encoded = self.conv(encoded)
-            encoded = tf.reshape(encoded, [-1, 2*self.patch_size[0]//self.pool_size, 2*self.patch_size[0]//self.pool_size, self.num_patches[-1], self.num_channels])
+            encoded = tf.reshape(encoded, [-1, 2*self.ps[0]//self.pool_size, 2*self.ps[0]//self.pool_size, self.num_patches[-1], self.num_channels])
             encoded = tf.transpose(encoded, [0,3,1,2,4])
-            encoded = tf.reshape(encoded, [-1, self.num_patches[-1], 4*self.num_channels*(self.patch_size[0]//self.pool_size)**2])
+            encoded = tf.reshape(encoded, [-1, self.num_patches[-1], 4*self.num_channels*(self.ps[0]//self.pool_size)**2])
             encoded = self.linear(encoded) + self.position_embedding(self.positions)
             return encoded
 
