@@ -107,7 +107,7 @@ class Resampling(tf.keras.layers.Layer):
             assert projection_dim is not None, f"Projection_dim must be specified when performing 'max' pooling type."
             self.projection_dim = [projection_dim for patch in self.patch_size]
             self.ps = [int(np.sqrt(proj//self.num_channels)) for proj in self.projection_dim]
-            self.maxpool = tf.keras.layers.MaxPool2D(self.num_channels*self.num_patches[-1], self.pool_size//2, strides = self.pool_size//2, padding = 'same')
+            self.maxpool = tf.keras.layers.MaxPool2D(self.num_channels*self.num_patches[-1], strides = self.pool_size//2, padding = 'same')
             self.linear = tf.keras.layers.Dense(self.projection_dim[-1])
             self.positions = tf.range(start=0, limit=self.num_patches[-1], delta=1)
             self.position_embedding = tf.keras.layers.Embedding(input_dim=self.num_patches[-1], output_dim=self.projection_dim[-1])
