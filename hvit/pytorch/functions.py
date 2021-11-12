@@ -180,7 +180,7 @@ class ReAttention(torch.nn.Module):
         x = (torch.matmul(attn, v)).transpose(1, 2).reshape(B, N, C)
         x = self.proj(x)
         x = self.proj_drop(x)
-        return x
+        return x, attn_next
 
 ## TransformerEncoder
 class TransformerEncoder(torch.nn.Module):
@@ -207,7 +207,8 @@ class TransformerEncoder(torch.nn.Module):
         self.attn_drop = attn_drop
         self.proj_drop = proj_drop
         self.linear_drop = linear_drop
-        if original_attn:
+        self.original_attn = original_attn
+        if self.original_attn:
             self.Attn = torch.nn.MultiheadAttention(projection_dim, self.num_heads, self.attn_drop, batch_first = True)
         else:
             self.Attn = ReAttention(self.projection_dim,
@@ -226,7 +227,10 @@ class TransformerEncoder(torch.nn.Module):
                                        dropout = self.linear_drop,
                                        )
     def forward(self, encoded_patches):
-        encoded_patch_attn = self.Attn(encoded_patches)
+        if self.original_attn:
+            encoded_patch_attn, _ = self.Attn(encoded_patches, encoded_patches, encoded_patches)
+        else:
+            encoded_patch_attn, _ = self.Attn(encoded_patches)
         encoded_patches = encoded_patch_attn + encoded_patches
         encoded_patches = self.LN1(encoded_patches)
         encoded_patches = self.FeedForward(encoded_patches) + encoded_patches
