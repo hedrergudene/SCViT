@@ -46,20 +46,22 @@ class HViT(torch.nn.Module):
         self.PE = PatchEncoder(self.img_size, self.patch_size, self.num_channels, self.projection_dim, self.dtype)
         self.Encoders = torch.nn.ModuleList()
         for i in range(len(self.num_patches)-1):
-            self.Encoders.append(
-                TransformerEncoder(self.img_size,
-                                   self.patch_size_list[i],
-                                   self.num_channels,
-                                   self.projection_dim,
-                                   self.hidden_dim_factor,
-                                   self.num_heads,
-                                   self.attn_drop,
-                                   self.proj_drop,
-                                   self.linear_drop,
-                                   self.original_attn,
-                                   )
-
-            )
+            # Block of Transformer Encoders
+            for _ in range(self.depth):
+                self.Encoders.append(
+                    TransformerEncoder(self.img_size,
+                                       self.patch_size_list[i],
+                                       self.num_channels,
+                                       self.projection_dim,
+                                       self.hidden_dim_factor,
+                                       self.num_heads,
+                                       self.attn_drop,
+                                       self.proj_drop,
+                                       self.linear_drop,
+                                       self.original_attn,
+                                       )
+                )
+            # Resampling
             self.Encoders.append(
                 Upsampling(
                        self.img_size,
