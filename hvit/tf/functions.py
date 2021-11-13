@@ -30,13 +30,13 @@ class DoubleConv(tf.keras.layers.Layer):
 
     def __init__(self, filters:int, pool_size:int):
         super(DoubleConv, self).__init__()
-        self.double_conv = tf.keras.Sequential(
+        self.double_conv = tf.keras.Sequential([
             tf.keras.layers.Conv2D(filters, kernel_size = pool_size, strides = pool_size, padding = 'same'),
             tf.keras.layers.BatchNormalization(),
             tf.keras.layers.ReLU(),
             tf.keras.layers.Conv2D(filters, kernel_size=3, padding='same'),
             tf.keras.layers.BatchNormalization(),
-            tf.keras.layers.ReLU(),
+            tf.keras.layers.ReLU()]
         )
 
     def call(self, x):
