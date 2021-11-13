@@ -85,7 +85,7 @@ class Resampling(tf.keras.layers.Layer):
         else:
             encoded = unflatten(encoded, self.num_channels)
             encoded = tf.reshape(tf.transpose(encoded, [0,2,3,1,4]), [-1, self.ps, self.ps, self.num_patches[0]*self.num_channels])
-            encoded = self.conv(encoded)
+            encoded = self.layer(encoded)
             encoded = tf.reshape(encoded, [-1, self.ps//self.pool_size, self.ps//self.pool_size, self.num_patches[-1], self.num_channels])
             encoded = tf.transpose(encoded, [0,3,1,2,4])
             encoded = tf.reshape(encoded, [-1, self.num_patches[-1], self.num_channels*(self.ps//self.pool_size)**2])
