@@ -30,13 +30,13 @@ class DoubleConv(tf.keras.layers.Layer):
 
     def __init__(self, filters:int, pool_size:int):
         super(DoubleConv, self).__init__()
-        self.double_conv = tf.keras.Sequential(
-            tf.keras.layers.Conv2D(filters, pool_size, strides = pool_size, padding = 'same'),
-            tf.keras.layers.BatchNorm2d(),
+        self.double_conv = tf.keras.Sequential([
+            tf.keras.layers.Conv2D(filters, kernel_size = pool_size, strides = pool_size, padding = 'same'),
+            tf.keras.layers.BatchNormalization(),
             tf.keras.layers.ReLU(),
-            tf.keras.layers.Conv2d(filters, kernel_size=3, padding='same'),
-            tf.keras.layers.BatchNorm2d(),
-            tf.keras.layers.ReLU(),
+            tf.keras.layers.Conv2D(filters, kernel_size=3, padding='same'),
+            tf.keras.layers.BatchNormalization(),
+            tf.keras.layers.ReLU()]
         )
 
     def call(self, x):
@@ -73,13 +73,8 @@ class Resampling(tf.keras.layers.Layer):
             self.positions = tf.range(start=0, limit=self.num_patches[-1], delta=1)
             self.position_embedding = tf.keras.layers.Embedding(input_dim=self.num_patches[-1], output_dim=self.projection_dim)
         else:
-            self.layer = tf.keras.Sequential([
-                tf.keras.layers.Conv2D(self.num_channels*self.num_patches[-1], self.pool_size, strides = self.pool_size, padding = 'same'),
-                tf.keras.layers.BatchNorm2d(),
-            ])
-            self.linear = tf.keras.layers.Dense(self.projection_dim[-1])
-            self.positions = tf.range(start=0, limit=self.num_patches[-1], delta=1)
-            self.position_embedding = tf.keras.layers.Embedding(input_dim=self.num_patches[-1], output_dim=self.projection_dim)
+            self.layer = DoubleConv(self.num_channels*self.num_patches[-1], self.pool_size)
+            self.linear = tf.keras.layers.Dense(self.projection_dim)
 
     def call(self, encoded:tf.Tensor):
         if self.resampling_type=='max':
@@ -90,7 +85,7 @@ class Resampling(tf.keras.layers.Layer):
         else:
             encoded = unflatten(encoded, self.num_channels)
             encoded = tf.reshape(tf.transpose(encoded, [0,2,3,1,4]), [-1, self.ps, self.ps, self.num_patches[0]*self.num_channels])
-            encoded = self.conv(encoded)
+            encoded = self.layer(encoded)
             encoded = tf.reshape(encoded, [-1, self.ps//self.pool_size, self.ps//self.pool_size, self.num_patches[-1], self.num_channels])
             encoded = tf.transpose(encoded, [0,3,1,2,4])
             encoded = tf.reshape(encoded, [-1, self.num_patches[-1], self.num_channels*(self.ps//self.pool_size)**2])
