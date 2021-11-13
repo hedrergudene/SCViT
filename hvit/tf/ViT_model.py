@@ -234,7 +234,8 @@ class HViT_benchmark(tf.keras.layers.Layer):
         self.num_channels = num_channels
         self.num_heads = num_heads
         self.depth = depth
-        self.mlp_head_units = [self.projection_dim] + mlp_head_units + [num_classes]
+        self.num_classes = num_classes
+        self.mlp_head_units = mlp_head_units + [self.num_classes]
         self.drop_attn = drop_attn
         self.drop_proj = drop_proj
         self.drop_linear = drop_linear
@@ -267,7 +268,7 @@ class HViT_benchmark(tf.keras.layers.Layer):
                                         )
                 self.Encoder_RS.append(Resampling(self.img_size, self.patch_size_list[i:i+2], self.num_channels, self.projection_dim, self.resampling_type))
         else:
-            for i in range(len(self.patch_size)):
+            for i in range(len(self.patch_size_list)-1):
                 self.Encoder.append(
                                     ReAttentionTransformerEncoder(self.img_size,
                                                                   self.patch_size_list[i],
@@ -282,18 +283,23 @@ class HViT_benchmark(tf.keras.layers.Layer):
                                         )
                 self.Encoder_RS.append(Resampling(self.img_size, self.patch_size[i:i+2], self.num_channels, self.projection_dim, self.resampling_type))
         ##MLP
-        for j in range(len(self.mlp_head_units)-1):
-            self.MLP.add(tf.keras.layers.Dense(i))
+        self.MLP = tf.keras.Sequential([])
+        for j in self.mlp_head_units:
+            self.MLP.add(tf.keras.layers.Dense(j))
             if (j+2)<len(self.mlp_head_units):
                 self.MLP.add(tf.keras.layers.Dropout(self.drop_linear))
   
     def call(self, X:tf.Tensor):
         # Patch
         encoded = self.PE(X)
+        print(encoded.shape)
         # Encoder
-        for i in range(len(self.patch_size_list)):
+        for i in range(len(self.patch_size_list)-1):
             encoded = self.Encoder[i](encoded)
             encoded = self.Encoder_RS[i](encoded)
+            print(encoded.shape)
         # MLP
+        encoded = tf.squeeze(encoded, axis = 1)
+        print(encoded.shape)
         logits = self.MLP(encoded)
         return logits

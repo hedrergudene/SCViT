@@ -78,6 +78,8 @@ class Resampling(tf.keras.layers.Layer):
                     tf.keras.layers.BatchNormalization(),
                 ])
             self.linear = tf.keras.layers.Dense(self.projection_dim)
+            self.positions = tf.range(start=0, limit=self.num_patches[-1], delta=1)
+            self.position_embedding = tf.keras.layers.Embedding(input_dim=self.num_patches[-1], output_dim=self.projection_dim)
 
     def call(self, encoded:tf.Tensor):
         if self.resampling_type=='max':
