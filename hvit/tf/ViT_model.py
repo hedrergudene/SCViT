@@ -224,7 +224,7 @@ class HViT_benchmark(tf.keras.layers.Layer):
                  resampling_type:str='conv',
                  original_attn:bool=True,
                  ):
-        super(HViT, self).__init__()
+        super(HViT_benchmark, self).__init__()
         #Validations
         assert resampling_type in ['max', 'conv'], f"Resampling type must be either 'max' or 'conv'."
         # Parameters
