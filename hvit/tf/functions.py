@@ -31,10 +31,10 @@ class DoubleConv(tf.keras.layers.Layer):
     def __init__(self, filters:int, pool_size:int):
         super(DoubleConv, self).__init__()
         self.double_conv = tf.keras.Sequential([
-            tf.keras.layers.Conv2D(filters, kernel_size = pool_size, strides = pool_size, padding = 'same'),
+            tf.keras.layers.DepthwiseConv2D(filters, kernel_size = pool_size, strides = pool_size, padding = 'same'),
             tf.keras.layers.BatchNormalization(),
             tf.keras.layers.ReLU(),
-            tf.keras.layers.Conv2D(filters, kernel_size=3, padding='same'),
+            tf.keras.layers.DepthwiseConv2D(filters, kernel_size=3, padding='same'),
             tf.keras.layers.BatchNormalization(),
             tf.keras.layers.ReLU()]
         )
@@ -74,8 +74,10 @@ class Resampling(tf.keras.layers.Layer):
             self.position_embedding = tf.keras.layers.Embedding(input_dim=self.num_patches[-1], output_dim=self.projection_dim)
         else:
             self.layer = tf.keras.Sequential([
-                    tf.keras.layers.Conv2D(self.num_channels*self.num_patches[-1], self.pool_size, strides = self.pool_size, padding = 'same'),
+                    #tf.keras.layers.Conv2D(self.num_channels*self.num_patches[-1], self.pool_size, strides = self.pool_size, padding = 'same'),
+                    tf.keras.layers.DepthwiseConv2D(self.pool_size, strides = self.pool_size, padding = 'same'),
                     tf.keras.layers.BatchNormalization(),
+                    tf.keras.layers.Lambda(lambda x: tf.keras.activations.gelu(x))
                 ])
             self.linear = tf.keras.layers.Dense(self.projection_dim)
             self.positions = tf.range(start=0, limit=self.num_patches[-1], delta=1)
