@@ -76,7 +76,6 @@ class Resampling(tf.keras.layers.Layer):
             self.layer = tf.keras.Sequential([
                     tf.keras.layers.Conv2D(self.num_channels*self.num_patches[-1], self.pool_size, strides = self.pool_size, padding = 'same'),
                     tf.keras.layers.BatchNormalization(),
-                    tf.keras.layers.ReLU(),
                 ])
             self.linear = tf.keras.layers.Dense(self.projection_dim)
 
