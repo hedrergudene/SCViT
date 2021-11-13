@@ -292,14 +292,11 @@ class HViT_benchmark(tf.keras.layers.Layer):
     def call(self, X:tf.Tensor):
         # Patch
         encoded = self.PE(X)
-        print(encoded.shape)
         # Encoder
         for i in range(len(self.patch_size_list)-1):
             encoded = self.Encoder[i](encoded)
             encoded = self.Encoder_RS[i](encoded)
-            print(encoded.shape)
         # MLP
         encoded = tf.squeeze(encoded, axis = 1)
-        print(encoded.shape)
         logits = self.MLP(encoded)
         return logits
