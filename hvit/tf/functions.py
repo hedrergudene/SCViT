@@ -73,7 +73,11 @@ class Resampling(tf.keras.layers.Layer):
             self.positions = tf.range(start=0, limit=self.num_patches[-1], delta=1)
             self.position_embedding = tf.keras.layers.Embedding(input_dim=self.num_patches[-1], output_dim=self.projection_dim)
         else:
-            self.layer = DoubleConv(self.num_channels*self.num_patches[-1], self.pool_size)
+            self.layer = tf.keras.Sequential([
+                    tf.keras.layers.Conv2D(self.num_channels*self.num_patches[-1], self.pool_size, strides = self.pool_size, padding = 'same'),
+                    tf.keras.layers.BatchNormalization(),
+                    tf.keras.layers.ReLU(),
+                ])
             self.linear = tf.keras.layers.Dense(self.projection_dim)
 
     def call(self, encoded:tf.Tensor):
