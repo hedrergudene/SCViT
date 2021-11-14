@@ -47,7 +47,7 @@ class DoubleConvResNet(tf.keras.layers.Layer):
     """(convolution => [BN] => ReLU) * 2"""
 
     def __init__(self, filters:int, pool_size:int):
-        super(DoubleConv, self).__init__()
+        super(DoubleConvResNet, self).__init__()
         self.conv_1 = tf.keras.Sequential([
             tf.keras.layers.Conv2D(filters, kernel_size = pool_size, strides = pool_size, padding = 'same'),
             tf.keras.layers.BatchNormalization(),
