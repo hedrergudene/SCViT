@@ -92,8 +92,7 @@ def build_transform(is_train, args):
         if not resize_im:
             # replace RandomResizedCropAndInterpolation with
             # RandomCrop
-            transform.transforms[0] = transforms.RandomCrop(
-                args.input_size, padding=4)
+            transform.transforms[0] = transforms.RandomCrop(args['input-size'], padding=4)
         return transform
 
     t = []
