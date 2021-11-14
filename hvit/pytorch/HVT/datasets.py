@@ -76,7 +76,7 @@ def build_dataset(is_train, args):
 
 
 def build_transform(is_train, args):
-    resize_im = args.input_size > 32
+    resize_im = args['input_size'] > 32
     if is_train:
         # this should always dispatch to transforms_imagenet_train
         transform = create_transform(
