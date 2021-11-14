@@ -214,11 +214,12 @@ def _conv_filter(state_dict, patch_size=16):
 
 
 @register_model
-def hvt_model(pretrained=False, head_dim=64, num_heads=3, input_size=32, patch_size=16, num_blocks=12, 
-              pool_block_width=12, pool_kernel_size=3, **kwargs):
+def hvt_model(pretrained=False, num_classes=1000, head_dim=64, num_heads=3, input_size=32, patch_size=16, num_blocks=12, 
+              pool_block_width=12, pool_kernel_size=3, drop_rate=0.1, drop_path_rate=0.0, **kwargs):
     embed_dim= head_dim * num_heads
-    model = HVT(img_size=input_size,
+    model = HVT(img_size=input_size, num_classes=num_classes,
         patch_size=patch_size, embed_dim=embed_dim, depth=num_blocks, num_heads=num_heads, mlp_ratio=4, qkv_bias=True,
-        norm_layer=partial(nn.LayerNorm, eps=1e-6), pool_block_width=pool_block_width, pool_kernel_size=pool_kernel_size, **kwargs)
+        norm_layer=partial(nn.LayerNorm, eps=1e-6), pool_block_width=pool_block_width, pool_kernel_size=pool_kernel_size, 
+        drop_rate=drop_rate, drop_path_rate=drop_path_rate, **kwargs)
     model.default_cfg = _cfg()
     return model
