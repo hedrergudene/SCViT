@@ -3,7 +3,7 @@ import os
 from pathlib import Path
 import json
 from datetime import datetime
-from params import args
+from .params import args
 
 # set logger
 dt = datetime.now()

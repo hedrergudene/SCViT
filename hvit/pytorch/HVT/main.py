@@ -24,7 +24,7 @@ from losses import DistillationLoss
 from samplers import RASampler
 from models import Attention, get_attention_flops
 import utils
-from params import args
+from .params import args
 from logger import logger
 
 
