@@ -76,15 +76,15 @@ def build_dataset(is_train, args):
 
 
 def build_transform(is_train, args):
-    resize_im = args['input_size'] > 32
+    resize_im = args['input-size'] > 32
     if is_train:
         # this should always dispatch to transforms_imagenet_train
         transform = create_transform(
-            input_size=args['input_size'],
+            input_size=args['input-size'],
             is_training=True,
-            color_jitter=args['color_jitter'],
+            color_jitter=args['color-jitter'],
             auto_augment=args['aa'],
-            interpolation=args['train_interpolation'],
+            interpolation=args['train-interpolation'],
             re_prob=args['reprob'],
             re_mode=args['remode'],
             re_count=args['recount'],
