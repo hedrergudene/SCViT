@@ -79,6 +79,9 @@ class Resampling(tf.keras.layers.Layer):
                     tf.keras.layers.Conv2D(self.num_channels*self.num_patches[-1], kernel_size = self.pool_size, strides = self.pool_size, padding = 'same'),
                     tf.keras.layers.BatchNormalization(),
                     tf.keras.layers.ELU(),
+                    tf.keras.layers.DepthwiseConv2D(kernel_size = self.pool_size, padding = 'same'),
+                    tf.keras.layers.LayerNormalization(),
+                    tf.keras.layers.ELU(),
                 ]
             )
             self.linear = tf.keras.layers.Dense(self.projection_dim)
