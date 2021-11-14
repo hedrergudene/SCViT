@@ -98,11 +98,11 @@ def build_transform(is_train, args):
 
     t = []
     if resize_im:
-        size = int((256 / 224) * args.input_size)
+        size = int((256 / 224) * args['input-size'])
         t.append(
             transforms.Resize(size, interpolation=3),  # to maintain same ratio w.r.t. 224 images
         )
-        t.append(transforms.CenterCrop(args.input_size))
+        t.append(transforms.CenterCrop(args['input-size']))
 
     t.append(transforms.ToTensor())
     t.append(transforms.Normalize(IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD))
