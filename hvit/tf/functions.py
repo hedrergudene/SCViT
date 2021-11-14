@@ -85,14 +85,14 @@ class Resampling(tf.keras.layers.Layer):
                 ]
             )
             self.linear = tf.keras.layers.Dense(self.projection_dim)
-            self.positions = tf.range(start=0, limit=self.num_patches[-1], delta=1)
-            self.position_embedding = tf.keras.layers.Embedding(input_dim=self.num_patches[-1], output_dim=self.projection_dim)
+            #self.positions = tf.range(start=0, limit=self.num_patches[-1], delta=1)
+            #self.position_embedding = tf.keras.layers.Embedding(input_dim=self.num_patches[-1], output_dim=self.projection_dim)
 
     def call(self, encoded:tf.Tensor):
         if self.resampling_type=='max':
             encoded = tf.reshape(encoded, [-1, self.sq_patch, self.sq_patch, self.projection_dim])
             encoded = self.layer(encoded)
-            encoded = tf.reshape(encoded, [-1, self.num_patches[-1], self.projection_dim]) + self.position_embedding(self.positions)
+            encoded = tf.reshape(encoded, [-1, self.num_patches[-1], self.projection_dim])# + self.position_embedding(self.positions)
             return encoded
         else:
             encoded = unflatten(encoded, self.num_channels)
