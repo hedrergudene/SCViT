@@ -54,15 +54,15 @@ class DoubleConvResNet(tf.keras.layers.Layer):
             tf.keras.layers.ELU(),
         ])
         self.conv_2 = tf.keras.Sequential([
-            tf.keras.layers.DepthwiseConv2D(pool_size, strides = pool_size, padding = 'same'),
+            tf.keras.layers.DepthwiseConv2D(pool_size, padding = 'same'),
             tf.keras.layers.BatchNormalization(),
             tf.keras.layers.ELU(),
             ])
 
     def call(self, x):
-        x = self.conv_1(x)
-        y = self.conv_2(x)
-        return x+y
+        y = self.conv_1(x)
+        z = self.conv_2(y)
+        return y+z
 
 
 
