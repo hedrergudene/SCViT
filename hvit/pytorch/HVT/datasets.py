@@ -89,6 +89,7 @@ def build_transform(is_train, args):
             re_mode=args['remode'],
             re_count=args['recount'],
         )
+        transform.transforms = [transforms.ToTensor()] + transform.transforms
         if not resize_im:
             # replace RandomResizedCropAndInterpolation with
             # RandomCrop
@@ -96,6 +97,7 @@ def build_transform(is_train, args):
         return transform
 
     t = []
+    t.append(transforms.ToTensor())
     if resize_im:
         size = int((256 / 224) * args['input-size'])
         t.append(
@@ -103,6 +105,6 @@ def build_transform(is_train, args):
         )
         t.append(transforms.CenterCrop(args['input-size']))
 
-    t.append(transforms.ToTensor())
+    #t.append(transforms.ToTensor())
     t.append(transforms.Normalize(IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD))
     return transforms.Compose(t)
