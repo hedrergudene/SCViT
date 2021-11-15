@@ -30,17 +30,29 @@ class DoubleConvResNet(tf.keras.layers.Layer):
 
     def __init__(self, filters:int, pool_size:int, resnet:bool=False):
         super(DoubleConvResNet, self).__init__()
+        self.resnet = resnet
         self.conv_1 = tf.keras.Sequential([
             tf.keras.layers.Conv2D(filters, kernel_size = pool_size, strides = pool_size, padding = 'same'),
             tf.keras.layers.BatchNormalization(),
             tf.keras.layers.ELU(),
         ])
-        self.conv_2 = tf.keras.Sequential([
-            tf.keras.layers.DepthwiseConv2D(pool_size, padding = 'same'),
-            tf.keras.layers.BatchNormalization(),
-            tf.keras.layers.ELU(),
+        if self.resnet:
+            self.conv_2 = tf.keras.Sequential([
+                tf.keras.layers.Conv2D(filters, kernel_size = pool_size, strides = pool_size, padding = 'same'),
+                tf.keras.layers.BatchNormalization(),
+                tf.keras.layers.ELU(),
+                tf.keras.layers.Conv2D(filters, kernel_size = pool_size, strides = pool_size, padding = 'same'),
+                tf.keras.layers.BatchNormalization(),
+                tf.keras.layers.ELU(),
+                ])
+        else:
+            self.conv_2 = tf.keras.Sequential([
+                tf.keras.layers.Conv2D(filters, kernel_size = pool_size, strides = pool_size, padding = 'same'),
+                tf.keras.layers.BatchNormalization(),
+                tf.keras.layers.ELU(),
             ])
-        self.resnet = resnet
+
+        
 
     def call(self, x):
         y = self.conv_1(x)
