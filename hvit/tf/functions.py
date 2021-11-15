@@ -25,28 +25,10 @@ def unflatten(flattened, num_channels):
 # Layers
 
 ## DoubleConv
-class DoubleConv(tf.keras.layers.Layer):
-    """(convolution => [BN] => ReLU) * 2"""
-
-    def __init__(self, filters:int, pool_size:int):
-        super(DoubleConv, self).__init__()
-        self.double_conv = tf.keras.Sequential([
-            tf.keras.layers.Conv2D(filters, kernel_size = pool_size, strides = pool_size, padding = 'same'),
-            tf.keras.layers.BatchNormalization(),
-            tf.keras.layers.ELU(),
-            tf.keras.layers.DepthwiseConv2D(pool_size, strides = pool_size, padding = 'same'),
-            tf.keras.layers.BatchNormalization(),
-            tf.keras.layers.ELU(),
-            ]
-        )
-
-    def call(self, x):
-        return self.double_conv(x)
-
 class DoubleConvResNet(tf.keras.layers.Layer):
     """(convolution => [BN] => ReLU) * 2"""
 
-    def __init__(self, filters:int, pool_size:int):
+    def __init__(self, filters:int, pool_size:int, resnet:bool=False):
         super(DoubleConvResNet, self).__init__()
         self.conv_1 = tf.keras.Sequential([
             tf.keras.layers.Conv2D(filters, kernel_size = pool_size, strides = pool_size, padding = 'same'),
@@ -58,11 +40,15 @@ class DoubleConvResNet(tf.keras.layers.Layer):
             tf.keras.layers.BatchNormalization(),
             tf.keras.layers.ELU(),
             ])
+        self.resnet = resnet
 
     def call(self, x):
         y = self.conv_1(x)
         z = self.conv_2(y)
-        return y+z
+        if self.resnet:
+            return y+z
+        else:
+            return z
 
 
 
@@ -99,9 +85,9 @@ class Resampling(tf.keras.layers.Layer):
             self.position_embedding = tf.keras.layers.Embedding(input_dim=self.num_patches[-1], output_dim=self.projection_dim)
         else:
             if self.resampling_type=='doubleconvresnet':
-                self.layer = DoubleConvResNet(self.num_channels*self.num_patches[-1], self.pool_size)
+                self.layer = DoubleConvResNet(self.num_channels*self.num_patches[-1], self.pool_size, True)
             else:
-                self.layer = DoubleConv(self.num_channels*self.num_patches[-1], self.pool_size)
+                self.layer = DoubleConvResNet(self.num_channels*self.num_patches[-1], self.pool_size, False)
             self.linear = tf.keras.layers.Dense(self.projection_dim)
             if self.add_position:
                 self.positions = tf.range(start=0, limit=self.num_patches[-1], delta=1)
