@@ -76,7 +76,7 @@ class Resampling(tf.keras.layers.Layer):
                  ):
         super(Resampling, self).__init__()
         # Validation
-        assert resampling_type in ['max', 'doubleconv', 'doubleconvresnet'], f"Resampling type must be either 'max', 'doubleconvresnet' or 'doubleconv'."
+        assert resampling_type in ['max','conv', 'doubleconv', 'doubleconvresnet'], f"Resampling type must be either 'max', 'conv', 'doubleconvresnet' or 'doubleconv'."
         assert projection_dim is not None, f"Projection_dim must be specified."
         assert (int(np.sqrt(projection_dim//num_channels))==np.sqrt(projection_dim//num_channels)), f"Projection dim has to be a perfect square (per channel)."
         # Parameters
@@ -96,7 +96,12 @@ class Resampling(tf.keras.layers.Layer):
             self.positions = tf.range(start=0, limit=self.num_patches[-1], delta=1)
             self.position_embedding = tf.keras.layers.Embedding(input_dim=self.num_patches[-1], output_dim=self.projection_dim)
         else:
-            if self.resampling_type=='doubleconvresnet':
+            if self.resampling_type=='conv':
+                self.layer = tf.keras.Sequential([
+                    tf.keras.layers.Conv2D(self.num_channels*self.num_patches[-1], kernel_size = self.pool_size, strides = self.pool_size, padding = 'same'),
+                    tf.keras.layers.BatchNormalization(),
+                ])
+            elif self.resampling_type=='doubleconvresnet':
                 self.layer = DoubleConvResNet(self.num_channels*self.num_patches[-1], self.pool_size, True)
             else:
                 self.layer = DoubleConvResNet(self.num_channels*self.num_patches[-1], self.pool_size, False)
