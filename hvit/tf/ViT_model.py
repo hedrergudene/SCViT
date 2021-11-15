@@ -147,17 +147,8 @@ class HViT(tf.keras.layers.Layer):
                 if (i+1)<len(self.patch_size):
                     self.Encoder_RS.append(Resampling(self.img_size, self.patch_size[i:i+2], self.num_channels, self.projection_dim[i], self.resampling_type))
         ##MLP
-        if self.resampling_type in ['max', 'avg']:
-            self.MLP = tf.keras.Sequential([tf.keras.layers.LayerNormalization(epsilon=1e-6),
+        self.MLP = tf.keras.Sequential([tf.keras.layers.LayerNormalization(epsilon=1e-6),
                                             tf.keras.layers.GlobalAveragePooling1D(),
-                                            ])
-        elif self.resampling_type in ['conv']:
-            self.MLP = tf.keras.Sequential([tf.keras.layers.LayerNormalization(epsilon=1e-6),
-                                            tf.keras.layers.GlobalAveragePooling1D(),
-                                            ])
-        elif self.resampling_type in ['standard']:
-            self.MLP = tf.keras.Sequential([tf.keras.layers.LayerNormalization(epsilon=1e-6),
-                                            tf.keras.layers.Flatten(),
                                             ])
 
         for i in self.mlp_head_units:
