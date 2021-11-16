@@ -226,11 +226,10 @@ class Upsampling(torch.nn.Module):
         self.projection_dim = [projection_dim for patch in self.patch_size]
         self.ratio = (max(self.patch_size)//min(self.patch_size))**2
         self.kernel_size = int(np.sqrt(self.ratio))
-        self.final_proj_dim = self.projection_dim[0]//self.ratio
-        self.standard_proj_dim = self.projection_dim[0]*self.ratio
+        self.final_proj_dim = self.projection_dim//self.ratio
         self.upsampling_type = upsampling_type
         # Layers
-        self.proj = torch.nn.Linear(self.final_proj_dim, self.projection_dim[1])
+        self.proj = torch.nn.Linear(self.final_proj_dim, self.projection_dim)
         self.positions = torch.arange(start = 0,
                          end = self.num_patches[1],
                          step = 1,
