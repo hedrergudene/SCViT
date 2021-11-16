@@ -24,40 +24,7 @@ def unflatten(flattened, num_channels):
         unflattened = torch.reshape(flattened, (bs, n, num_channels, int(np.sqrt(p//num_channels)), int(np.sqrt(p//num_channels))))
         return unflattened
 
-## Unpatch
-def unpatch(x, num_channels):
-    if len(x.size()) < 5:
-        batch_size, num_patches, ch, h, w = unflatten(x, num_channels).size()
-    else:
-        batch_size, num_patches, ch, h, w = x.size()
-    assert ch==num_channels, f"Num. channels must agree"
-    elem_per_axis = int(np.sqrt(num_patches))
-    patches_middle = torch.stack([torch.cat([patch for patch in x.reshape(batch_size,elem_per_axis,elem_per_axis,ch,h,w)[i]], dim = -2) for i in range(batch_size)], dim = 0)
-    restored_images = torch.stack([torch.cat([patch for patch in patches_middle[i]], dim = -1) for i in range(batch_size)], dim = 0).reshape(batch_size,1,ch,h*elem_per_axis,w*elem_per_axis)
-    restored_images = torch.squeeze(restored_images, dim = 1)
-    return restored_images
-
-## Downsampling
-def downsampling(encoded_patches, num_channels):
-    _, _, embeddings = encoded_patches.size()
-    ch, h, w = num_channels, int(np.sqrt(embeddings/num_channels)), int(np.sqrt(embeddings/num_channels))
-    original_image = unpatch(unflatten(encoded_patches, num_channels), num_channels)
-    new_patches = patch(original_image, patch_size = h//2)
-    new_patches_flattened = torch.flatten(new_patches, start_dim = -3, end_dim = -1)
-    return new_patches_flattened
-
-## Upsampling
-def upsampling(encoded_patches, num_channels):
-    _, _, embeddings = encoded_patches.size()
-    h, w, ch = int(np.sqrt(embeddings/num_channels)), int(np.sqrt(embeddings/num_channels)), num_channels
-    original_image = unpatch(unflatten(encoded_patches, num_channels), num_channels)
-    new_patches = patch(original_image, patch_size = h*2)
-    new_patches_flattened = torch.flatten(new_patches, start_dim = -3, end_dim = -1)
-    return new_patches_flattened
-
-
 # Layers
-
 ## DoubleConv
 class DoubleConv(torch.nn.Module):
     """(convolution => [BN] => ReLU) * 2"""
@@ -67,10 +34,10 @@ class DoubleConv(torch.nn.Module):
         self.double_conv = torch.nn.Sequential(
             torch.nn.Conv2d(num_channels, num_channels, kernel_size=3, padding='same'),
             torch.nn.BatchNorm2d(num_channels),
-            torch.nn.ReLU(inplace=True),
+            torch.nn.GeLU(),
             torch.nn.Conv2d(num_channels, num_channels, kernel_size=3, padding='same'),
             torch.nn.BatchNorm2d(num_channels),
-            torch.nn.ReLU(inplace=True)
+            torch.nn.GeLU(),
         )
 
     def forward(self, x):
@@ -264,13 +231,18 @@ class Upsampling(torch.nn.Module):
         self.upsampling_type = upsampling_type
         # Layers
         self.proj = torch.nn.Linear(self.final_proj_dim, self.projection_dim[1])
+        self.positions = torch.arange(start = 0,
+                         end = self.num_patches,
+                         step = 1,
+                         )
+        self.position_embedding = torch.nn.Embedding(num_embeddings=self.num_patches,
+                                                     embedding_dim = self.projection_dim,
+                                                     )
         if self.upsampling_type=='conv':
-            self.sequence = torch.nn.Sequential(
-                torch.nn.Conv2d(self.num_channels*self.num_patches[0], self.num_channels*self.num_patches[1], kernel_size = self.kernel_size, stride = self.kernel_size),
-                DoubleConv(self.num_channels*self.num_patches[1]),
-            )
+            self.sequence = torch.nn.Conv2d(self.num_channels*self.num_patches[0], self.num_channels*self.num_patches[1], kernel_size = self.kernel_size, stride = self.kernel_size),
+            self.resnet = DoubleConv(self.num_channels*self.num_patches[1])
         else:
-            self.sequence = torch.nn.MaxPool2d(kernel_size, stride=kernel_size)
+            self.sequence = torch.nn.MaxPool2d(self.kernel_size, stride=self.kernel_size)
 
     def forward(self,
                 encoded_patches:torch.Tensor,
@@ -279,12 +251,13 @@ class Upsampling(torch.nn.Module):
             encoded_patches = unflatten(encoded_patches, self.num_channels)
             encoded_patches = torch.flatten(encoded_patches, start_dim = 1, end_dim = 2)
             encoded_patches = self.sequence(encoded_patches)
+            encoded_patches = encoded_patches + self.resnet(encoded_patches)
             encoded_patches = encoded_patches.reshape((-1, self.num_patches[1], self.num_channels, self.ps//2, self.ps//2))
             encoded_patches = encoded_patches.flatten(-3, -1)
-            encoded_patches = self.proj(encoded_patches)
+            encoded_patches = self.proj(encoded_patches) + self.position_embedding(self.positions)
             return encoded_patches
         elif self.upsampling_type=='max':
-            encoded_patches = encoded.permute((0,2,1)).reshape((-1, self.projection_dim[0], int(np.sqrt(self.num_patches[0])), int(np.sqrt(self.num_patches[0]))))
-            encoded_patches = sequence(encoded_patches)
-            encoded_patches = encoded_patches.flatten(-2,-1).permute((0,2,1))
+            encoded_patches = encoded_patches.permute((0,2,1)).reshape((-1, self.projection_dim[0], int(np.sqrt(self.num_patches[0])), int(np.sqrt(self.num_patches[0]))))
+            encoded_patches = self.sequence(encoded_patches)
+            encoded_patches = encoded_patches.flatten(-2,-1).permute((0,2,1)) + self.position_embedding(self.positions)
             return encoded_patches
