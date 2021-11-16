@@ -223,6 +223,7 @@ class ReAttention(tf.keras.layers.Layer):
         head_dim = self.dim // self.num_heads
         self.apply_transform = apply_transform
         self.scale = qk_scale or head_dim ** -0.5
+
         if apply_transform:
             self.reatten_matrix = tf.keras.layers.Conv2D(self.num_patches, 1)
             self.var_norm = tf.keras.layers.BatchNormalization()        
@@ -244,7 +245,7 @@ class ReAttention(tf.keras.layers.Layer):
         attn = tf.keras.activations.softmax(attn, axis = -1)
         attn = self.attn_drop(attn)
         if self.apply_transform:
-            attn = self.var_norm(self.reatten_matrix(attn)) * self.reatten_scale
+            attn = self.var_norm(self.reatten_matrix(attn))
         attn_next = attn
         x = tf.reshape(tf.transpose(tf.linalg.matmul(attn, v), perm = [0,2,1,3]), shape = [-1, N, C])
         x = self.proj(x)
