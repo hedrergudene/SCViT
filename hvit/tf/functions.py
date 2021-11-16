@@ -226,30 +226,64 @@ class ReAttention(tf.keras.layers.Layer):
         if apply_transform:
             self.reatten_matrix = tf.keras.layers.Conv2D(self.num_patches, 1)
             self.var_norm = tf.keras.layers.BatchNormalization()
-            self.qconv2d = tf.keras.layers.Conv2D(self.num_channels,3,padding = 'same', kernel_initializer = tf.random_normal_initializer(0., 0.02), use_bias=qkv_bias)
-            self.kconv2d = tf.keras.layers.Conv2D(self.num_channels,3,padding = 'same', kernel_initializer = tf.random_normal_initializer(0., 0.02), use_bias=qkv_bias)
-            self.vconv2d = tf.keras.layers.Conv2D(self.num_channels,3,padding = 'same', kernel_initializer = tf.random_normal_initializer(0., 0.02), use_bias=qkv_bias)
+            self.qconv2d = tf.keras.Sequential([
+                                                tf.keras.layers.Conv2D(3*self.num_patches*self.num_channels,3,padding = 'same', kernel_initializer = tf.random_normal_initializer(0., 0.02), use_bias=qkv_bias),
+                                                tf.keras.layers.BatchNormalization(),
+                                                tf.keras.layers.Conv2D(self.num_patches*self.num_channels,3,padding = 'same', kernel_initializer = tf.random_normal_initializer(0., 0.02), use_bias=qkv_bias),
+                                                tf.keras.layers.BatchNormalization(),
+                                              ])
+            self.kconv2d = tf.keras.Sequential([
+                                                tf.keras.layers.Conv2D(3*self.num_patches*self.num_channels,3,padding = 'same', kernel_initializer = tf.random_normal_initializer(0., 0.02), use_bias=qkv_bias),
+                                                tf.keras.layers.BatchNormalization(),
+                                                tf.keras.layers.Conv2D(self.num_patches*self.num_channels,3,padding = 'same', kernel_initializer = tf.random_normal_initializer(0., 0.02), use_bias=qkv_bias),
+                                                tf.keras.layers.BatchNormalization(),
+                                              ])
+            self.vconv2d = tf.keras.Sequential([
+                                                tf.keras.layers.Conv2D(3*self.num_patches*self.num_channels,3,padding = 'same', kernel_initializer = tf.random_normal_initializer(0., 0.02), use_bias=qkv_bias),
+                                                tf.keras.layers.BatchNormalization(),
+                                                tf.keras.layers.Conv2D(self.num_patches*self.num_channels,3,padding = 'same', kernel_initializer = tf.random_normal_initializer(0., 0.02), use_bias=qkv_bias),
+                                                tf.keras.layers.BatchNormalization(),
+                                              ])
             self.reatten_scale = self.scale if transform_scale else 1.0
         else:
-            self.qconv2d = tf.keras.layers.Conv2D(self.num_channels,3,padding = 'same', kernel_initializer = tf.random_normal_initializer(0., 0.02), use_bias=qkv_bias)
-            self.kconv2d = tf.keras.layers.Conv2D(self.num_channels,3,padding = 'same', kernel_initializer = tf.random_normal_initializer(0., 0.02), use_bias=qkv_bias)
-            self.vconv2d = tf.keras.layers.Conv2D(self.num_channels,3,padding = 'same', kernel_initializer = tf.random_normal_initializer(0., 0.02), use_bias=qkv_bias)
+            self.qconv2d = tf.keras.Sequential([
+                                                tf.keras.layers.Conv2D(3*self.num_patches*self.num_channels,3,padding = 'same', kernel_initializer = tf.random_normal_initializer(0., 0.02), use_bias=qkv_bias),
+                                                tf.keras.layers.BatchNormalization(),
+                                                tf.keras.layers.Conv2D(self.num_patches*self.num_channels,3,padding = 'same', kernel_initializer = tf.random_normal_initializer(0., 0.02), use_bias=qkv_bias),
+                                                tf.keras.layers.BatchNormalization(),
+                                              ])
+            self.kconv2d = tf.keras.Sequential([
+                                                tf.keras.layers.Conv2D(3*self.num_patches*self.num_channels,3,padding = 'same', kernel_initializer = tf.random_normal_initializer(0., 0.02), use_bias=qkv_bias),
+                                                tf.keras.layers.BatchNormalization(),
+                                                tf.keras.layers.Conv2D(self.num_patches*self.num_channels,3,padding = 'same', kernel_initializer = tf.random_normal_initializer(0., 0.02), use_bias=qkv_bias),
+                                                tf.keras.layers.BatchNormalization(),
+                                              ])
+            self.vconv2d = tf.keras.Sequential([
+                                                tf.keras.layers.Conv2D(3*self.num_patches*self.num_channels,3,padding = 'same', kernel_initializer = tf.random_normal_initializer(0., 0.02), use_bias=qkv_bias),
+                                                tf.keras.layers.BatchNormalization(),
+                                                tf.keras.layers.Conv2D(self.num_patches*self.num_channels,3,padding = 'same', kernel_initializer = tf.random_normal_initializer(0., 0.02), use_bias=qkv_bias),
+                                                tf.keras.layers.BatchNormalization(),
+                                              ])
         
         self.attn_drop = tf.keras.layers.Dropout(attn_drop)
         self.proj = tf.keras.layers.Dense(dim)
         self.proj_drop = tf.keras.layers.Dropout(proj_drop)
     
     def create_queries(self, x, letter):
+        _, patches, proj = x.shape.as_list()
+        ps = int(np.sqrt(proj//self.num_channels))
+        x = unflatten(x, self.num_channels) #Shape: [batch, patches, height, width, channels]
+        x = tf.transpose(x, perm=[0,2,3,1,4]) #Shape: [batch, height, width, patches, channels]
+        x = tf.reshape(x, shape=[-1, ps, ps, patches*self.num_channels]) #Shape: [batch, height, width, patches*channels]
         if letter=='q':
-            x = unflatten(x, self.num_channels)
-            x = tf.map_fn(fn=lambda y: tf.keras.activations.gelu(self.qconv2d(y)), elems=x)
+            x = self.qconv2d(x) #Shape: [batch, height, width, patches*channels]
         if letter == 'k':
-            x = unflatten(x, self.num_channels)
-            x = tf.map_fn(fn=lambda y: tf.keras.activations.gelu(self.kconv2d(y)), elems=x)
+            x = self.kconv2d(x) #Shape: [batch, height, width, patches*channels]
         if letter == 'v':
-            x = unflatten(x, self.num_channels)
-            x = tf.map_fn(fn=lambda y: tf.keras.activations.gelu(self.vconv2d(y)), elems=x)
+            x = self.vconv2d(x) #Shape: [batch, height, width, patches*channels]
 
+        x = tf.reshape(x, shape=[-1, ps, ps, patches, self.num_channels]) #Shape: [batch, height, width, patches, channels]
+        x = tf.transpose(x, perm=[0,3,1,2,4]) #Shape: [batch, height, width, patches, channels]
         x = tf.reshape(x, shape=[-1, self.num_patches, self.dim])
         x = tf.reshape(x, shape = [-1, self.num_patches, self.num_heads, self.dim//self.num_heads, 1])
         x = tf.transpose(x, perm = [4,0,2,1,3])
@@ -270,7 +304,6 @@ class ReAttention(tf.keras.layers.Layer):
         x = self.proj(x)
         x = self.proj_drop(x)
         return x, attn_next
-
 
 ## Transformer Encoder
 class AttentionTransformerEncoder(tf.keras.layers.Layer):
