@@ -49,7 +49,7 @@ class PatchEncoder(torch.nn.Module):
                  img_size:int,
                  patch_size:int,
                  num_channels:int,
-                 projection_dim:int=None,
+                 projection_dim:int=768,
                  dtype:torch.dtype=torch.float32,
                  ):
         super(PatchEncoder, self).__init__()
@@ -58,7 +58,7 @@ class PatchEncoder(torch.nn.Module):
         self.patch_size = patch_size
         self.num_channels = num_channels
         self.dtype = dtype
-        self.projection_dim = projection_dim if projection_dim is not None else self.num_channels*self.patch_size**2
+        self.projection_dim = projection_dim
         self.num_patches = (self.img_size//self.patch_size)**2
         self.positions = torch.arange(start = 0,
                          end = self.num_patches,
