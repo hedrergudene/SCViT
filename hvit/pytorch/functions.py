@@ -232,10 +232,10 @@ class Upsampling(torch.nn.Module):
         # Layers
         self.proj = torch.nn.Linear(self.final_proj_dim, self.projection_dim[1])
         self.positions = torch.arange(start = 0,
-                         end = self.num_patches,
+                         end = self.num_patches[1],
                          step = 1,
                          )
-        self.position_embedding = torch.nn.Embedding(num_embeddings=self.num_patches,
+        self.position_embedding = torch.nn.Embedding(num_embeddings=self.num_patches[1],
                                                      embedding_dim = self.projection_dim,
                                                      )
         if self.upsampling_type=='conv':
