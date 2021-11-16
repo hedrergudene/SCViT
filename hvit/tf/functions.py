@@ -206,10 +206,10 @@ class ReAttention(tf.keras.layers.Layer):
                  num_patches,
                  num_channels=1,
                  num_heads=8,
-                 qkv_bias=False,
+                 qkv_bias=True,
                  qk_scale=None,
-                 attn_drop=0.2,
-                 proj_drop=0.2,
+                 attn_drop=0.0,
+                 proj_drop=0.0,
                  apply_transform=True,
                  transform_scale=False,
                  ):
@@ -223,48 +223,29 @@ class ReAttention(tf.keras.layers.Layer):
         head_dim = self.dim // self.num_heads
         self.apply_transform = apply_transform
         self.scale = qk_scale or head_dim ** -0.5
+
         if apply_transform:
             self.reatten_matrix = tf.keras.layers.Conv2D(self.num_patches, 1)
-            self.var_norm = tf.keras.layers.BatchNormalization()
-            self.qconv2d = tf.keras.layers.Conv2D(self.num_channels,3,padding = 'same', kernel_initializer = tf.random_normal_initializer(0., 0.02), use_bias=qkv_bias)
-            self.kconv2d = tf.keras.layers.Conv2D(self.num_channels,3,padding = 'same', kernel_initializer = tf.random_normal_initializer(0., 0.02), use_bias=qkv_bias)
-            self.vconv2d = tf.keras.layers.Conv2D(self.num_channels,3,padding = 'same', kernel_initializer = tf.random_normal_initializer(0., 0.02), use_bias=qkv_bias)
-            self.reatten_scale = self.scale if transform_scale else 1.0
-        else:
-            self.qconv2d = tf.keras.layers.Conv2D(self.num_channels,3,padding = 'same', kernel_initializer = tf.random_normal_initializer(0., 0.02), use_bias=qkv_bias)
-            self.kconv2d = tf.keras.layers.Conv2D(self.num_channels,3,padding = 'same', kernel_initializer = tf.random_normal_initializer(0., 0.02), use_bias=qkv_bias)
-            self.vconv2d = tf.keras.layers.Conv2D(self.num_channels,3,padding = 'same', kernel_initializer = tf.random_normal_initializer(0., 0.02), use_bias=qkv_bias)
-        
+            self.var_norm = tf.keras.layers.BatchNormalization()        
         self.attn_drop = tf.keras.layers.Dropout(attn_drop)
+        self.Lin_Proj = tf.keras.layers.Dense(3*self.dim)
         self.proj = tf.keras.layers.Dense(dim)
         self.proj_drop = tf.keras.layers.Dropout(proj_drop)
     
-    def create_queries(self, x, letter):
-        if letter=='q':
-            x = unflatten(x, self.num_channels)
-            x = tf.map_fn(fn=lambda y: tf.keras.activations.gelu(self.qconv2d(y)), elems=x)
-        if letter == 'k':
-            x = unflatten(x, self.num_channels)
-            x = tf.map_fn(fn=lambda y: tf.keras.activations.gelu(self.kconv2d(y)), elems=x)
-        if letter == 'v':
-            x = unflatten(x, self.num_channels)
-            x = tf.map_fn(fn=lambda y: tf.keras.activations.gelu(self.vconv2d(y)), elems=x)
-
-        x = tf.reshape(x, shape=[-1, self.num_patches, self.dim])
-        x = tf.reshape(x, shape = [-1, self.num_patches, self.num_heads, self.dim//self.num_heads, 1])
+    def create_queries(self, x):
+        x = self.Lin_Proj(x)
+        x = tf.reshape(x, shape = [-1, self.num_patches, self.num_heads, self.dim//self.num_heads, 3])
         x = tf.transpose(x, perm = [4,0,2,1,3])
-        return x[0]
+        return x[0], x[1], x[2]
 
     def call(self, x, atten=None):
         _, N, C = x.shape.as_list()
-        q = self.create_queries(x, 'q')
-        k = self.create_queries(x, 'k')
-        v = self.create_queries(x, 'v')
+        q, k, v = self.create_queries(x)
         attn = (tf.linalg.matmul(q, k, transpose_b = True)) * self.scale
         attn = tf.keras.activations.softmax(attn, axis = -1)
         attn = self.attn_drop(attn)
         if self.apply_transform:
-            attn = self.var_norm(self.reatten_matrix(attn)) * self.reatten_scale
+            attn = self.var_norm(self.reatten_matrix(attn))
         attn_next = attn
         x = tf.reshape(tf.transpose(tf.linalg.matmul(attn, v), perm = [0,2,1,3]), shape = [-1, N, C])
         x = self.proj(x)
