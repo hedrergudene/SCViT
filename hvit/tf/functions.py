@@ -71,12 +71,12 @@ class Resampling(tf.keras.layers.Layer):
                  patch_size:List[int]=[8,16],
                  num_channels:int=3,
                  projection_dim:int=768,
-                 resampling_type:str='doubleconv',
+                 resampling_type:str='maxconv',
                  add_position:bool = False,
                  ):
         super(Resampling, self).__init__()
         # Validation
-        assert resampling_type in ['max','conv', 'doubleconv', 'doubleconvresnet'], f"Resampling type must be either 'max', 'conv', 'doubleconvresnet' or 'doubleconv'."
+        assert resampling_type in ['max','conv', 'maxconv', 'doubleconvresnet'], f"Resampling type must be either 'max', 'conv', 'doubleconvresnet' or 'doubleconv'."
         assert projection_dim is not None, f"Projection_dim must be specified."
         assert (int(np.sqrt(projection_dim//num_channels))==np.sqrt(projection_dim//num_channels)), f"Projection dim has to be a perfect square (per channel)."
         # Parameters
@@ -93,6 +93,19 @@ class Resampling(tf.keras.layers.Layer):
         if self.resampling_type=='max':
             self.sq_patch = int(np.sqrt(self.num_patches[0]))
             self.layer = tf.keras.layers.MaxPooling2D(pool_size = self.pool_size, strides = self.pool_size, padding = 'same')
+            self.positions = tf.range(start=0, limit=self.num_patches[-1], delta=1)
+            self.position_embedding = tf.keras.layers.Embedding(input_dim=self.num_patches[-1], output_dim=self.projection_dim)
+        elif self.resampling_type=='maxconv':
+            self.sq_patch = int(np.sqrt(self.num_patches[0]))
+            self.layer = tf.keras.layers.MaxPooling2D(pool_size = self.pool_size, strides = self.pool_size, padding = 'same')
+            self.seq = tf.keras.Sequential([
+                tf.keras.layers.DepthwiseConv2D(kernel_size = 3, padding = 'same'),
+                tf.keras.layers.BatchNormalization(),
+                tf.keras.layers.ELU(),
+                tf.keras.layers.DepthwiseConv2D(kernel_size = 3, padding = 'same'),
+                tf.keras.layers.BatchNormalization(),
+                tf.keras.layers.ELU(),
+                ])
             self.positions = tf.range(start=0, limit=self.num_patches[-1], delta=1)
             self.position_embedding = tf.keras.layers.Embedding(input_dim=self.num_patches[-1], output_dim=self.projection_dim)
         else:
@@ -116,6 +129,12 @@ class Resampling(tf.keras.layers.Layer):
             encoded = self.layer(encoded)
             encoded = tf.reshape(encoded, [-1, self.num_patches[-1], self.projection_dim]) + self.position_embedding(self.positions)
             return encoded
+        if self.resampling_type=='maxconv':
+            encoded = tf.reshape(encoded, [-1, self.sq_patch, self.sq_patch, self.projection_dim])
+            encoded = self.layer(encoded)
+            encoded = .5*(encoded + self.seq(encoded))
+            encoded = tf.reshape(encoded, [-1, self.num_patches[-1], self.projection_dim]) + self.position_embedding(self.positions)
+            return encoded
         else:
             encoded = unflatten(encoded, self.num_channels)
             encoded = tf.reshape(tf.transpose(encoded, [0,2,3,1,4]), [-1, self.ps, self.ps, self.num_patches[0]*self.num_channels])
@@ -128,7 +147,6 @@ class Resampling(tf.keras.layers.Layer):
             else:
                 encoded = self.linear(encoded)
             return encoded
-
 ## Patch Encoder
 class PatchEncoder(tf.keras.layers.Layer):
     def __init__(self,
