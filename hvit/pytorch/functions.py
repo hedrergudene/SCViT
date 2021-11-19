@@ -29,15 +29,15 @@ def unflatten(flattened, num_channels):
 class DoubleConv(torch.nn.Module):
     """(convolution => [BN] => ReLU) * 2"""
 
-    def __init__(self, num_channels:int):
+    def __init__(self, num_channels:int, groups:int):
         super(DoubleConv, self).__init__()
         self.double_conv = torch.nn.Sequential(
-            torch.nn.Conv2d(num_channels, num_channels, kernel_size=3, padding='same'),
+            torch.nn.Conv2d(num_channels, num_channels, kernel_size=3, padding='same', groups = groups),
             torch.nn.BatchNorm2d(num_channels),
-            torch.nn.GeLU(),
-            torch.nn.Conv2d(num_channels, num_channels, kernel_size=3, padding='same'),
+            torch.nn.GELU(),
+            torch.nn.Conv2d(num_channels, num_channels, kernel_size=3, padding='same', groups = groups),
             torch.nn.BatchNorm2d(num_channels),
-            torch.nn.GeLU(),
+            torch.nn.GELU(),
         )
 
     def forward(self, x):
@@ -95,59 +95,6 @@ class FeedForward(torch.nn.Module):
     def forward(self, x):
         return self.net(x)
 
-## ReAttention
-class ReAttention(torch.nn.Module):
-    def __init__(self,
-                 dim,
-                 num_channels=3,
-                 num_heads=8,
-                 qkv_bias=False,
-                 qk_scale=None,
-                 attn_drop=0.,
-                 proj_drop=0.,
-                 apply_transform=True,
-                 transform_scale=False,
-                 ):
-        super().__init__()
-        # Parameters
-        self.num_heads = num_heads
-        self.num_channels = num_channels
-        head_dim = dim // num_heads
-        self.apply_transform = apply_transform
-        self.scale = qk_scale or head_dim ** -0.5
-
-        # Layers
-        if apply_transform:
-            self.reatten_matrix = torch.nn.Conv2d(self.num_heads,self.num_heads, 1, 1)
-            self.var_norm = torch.nn.BatchNorm2d(self.num_heads)
-            self.qconv2d = torch.nn.Conv2d(self.num_channels,self.num_channels,3,padding = 'same', bias=qkv_bias)
-            self.kconv2d = torch.nn.Conv2d(self.num_channels,self.num_channels,3,padding = 'same', bias=qkv_bias)
-            self.vconv2d = torch.nn.Conv2d(self.num_channels,self.num_channels,3,padding = 'same', bias=qkv_bias)
-            self.reatten_scale = self.scale if transform_scale else 1.0
-        else:
-            self.qconv2d = torch.nn.Conv2d(self.num_channels,self.num_channels,3,padding = 'same', bias=qkv_bias)
-            self.kconv2d = torch.nn.Conv2d(self.num_channels,self.num_channels,3,padding = 'same', bias=qkv_bias)
-            self.vconv2d = torch.nn.Conv2d(self.num_channels,self.num_channels,3,padding = 'same', bias=qkv_bias)
-        
-        self.attn_drop = torch.nn.Dropout(attn_drop)
-        self.proj = torch.nn.Linear(dim, dim)
-        self.proj_drop = torch.nn.Dropout(proj_drop)
-
-    def forward(self, x, atten=None):
-        B, N, C = x.shape
-        q = torch.flatten(torch.stack([self.qconv2d(y) for y in unflatten(x, self.num_channels)], dim = 0), -3,-1).reshape(B, N, 1, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)[0]
-        k = torch.flatten(torch.stack([self.kconv2d(y) for y in unflatten(x, self.num_channels)], dim = 0), -3,-1).reshape(B, N, 1, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)[0]
-        v = torch.flatten(torch.stack([self.vconv2d(y) for y in unflatten(x, self.num_channels)], dim = 0), -3,-1).reshape(B, N, 1, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)[0]
-        attn = (torch.matmul(q, k.transpose(-2, -1))) * self.scale
-        attn = torch.nn.functional.softmax(attn, dim = -1)
-        attn = self.attn_drop(attn)
-        if self.apply_transform:
-            attn = self.var_norm(self.reatten_matrix(attn)) * self.reatten_scale
-        attn_next = attn
-        x = (torch.matmul(attn, v)).transpose(1, 2).reshape(B, N, C)
-        x = self.proj(x)
-        x = self.proj_drop(x)
-        return x, attn_next
 
 ## TransformerEncoder
 class TransformerEncoder(torch.nn.Module):
@@ -161,7 +108,6 @@ class TransformerEncoder(torch.nn.Module):
                  attn_drop:float=.2,
                  proj_drop:float=.2,
                  linear_drop:float=.2,
-                 original_attn:bool=True,
                  ):
         super().__init__()
         self.img_size = img_size
@@ -174,17 +120,7 @@ class TransformerEncoder(torch.nn.Module):
         self.attn_drop = attn_drop
         self.proj_drop = proj_drop
         self.linear_drop = linear_drop
-        self.original_attn = original_attn
-        if self.original_attn:
-            self.Attn = torch.nn.MultiheadAttention(projection_dim, self.num_heads, self.attn_drop, batch_first = True)
-        else:
-            self.Attn = ReAttention(self.projection_dim,
-                                    num_channels = self.num_channels,
-                                    num_heads = self.num_heads,
-                                    qkv_bias = True,
-                                    attn_drop = self.attn_drop,
-                                    proj_drop = self.proj_drop,
-                                    )
+        self.Attn = torch.nn.MultiheadAttention(projection_dim, self.num_heads, self.attn_drop, batch_first = True)
         self.LN1 = torch.nn.LayerNorm(normalized_shape = (self.num_patches, self.projection_dim),
                                      )
         self.LN2 = torch.nn.LayerNorm(normalized_shape = (self.num_patches, self.projection_dim),
@@ -194,10 +130,7 @@ class TransformerEncoder(torch.nn.Module):
                                        dropout = self.linear_drop,
                                        )
     def forward(self, encoded_patches):
-        if self.original_attn:
-            encoded_patch_attn, _ = self.Attn(encoded_patches, encoded_patches, encoded_patches)
-        else:
-            encoded_patch_attn, _ = self.Attn(encoded_patches)
+        encoded_patch_attn, _ = self.Attn(encoded_patches, encoded_patches, encoded_patches)
         encoded_patches = encoded_patch_attn + encoded_patches
         encoded_patches = self.LN1(encoded_patches)
         encoded_patches = self.FeedForward(encoded_patches) + encoded_patches
@@ -211,11 +144,11 @@ class Upsampling(torch.nn.Module):
                  patch_size:List[int],
                  num_channels:int,
                  projection_dim:int=768,
-                 upsampling_type:str='conv',
+                 upsampling_type:str='hybrid',
                  ):
         super(Upsampling, self).__init__()
         # Validation
-        assert upsampling_type in ['max', 'conv'], f"Upsampling type must either be 'max' or 'conv'."
+        assert upsampling_type in ['hybrid', 'hybrid_channel'], f"Upsampling type must either be 'hybrid' or 'hybrid_channel'."
         assert patch_size[0]<patch_size[1], f"When upsampling, patch_size[0]<patch_size[1]."
         # Parameters
         self.img_size = img_size
@@ -223,7 +156,7 @@ class Upsampling(torch.nn.Module):
         self.ps = int(np.sqrt(projection_dim//num_channels))
         self.num_patches = [(self.img_size//patch)**2 for patch in self.patch_size]
         self.num_channels = num_channels
-        self.projection_dim = [projection_dim for patch in self.patch_size]
+        self.projection_dim = projection_dim
         self.ratio = (max(self.patch_size)//min(self.patch_size))**2
         self.kernel_size = int(np.sqrt(self.ratio))
         self.final_proj_dim = self.projection_dim//self.ratio
@@ -237,26 +170,34 @@ class Upsampling(torch.nn.Module):
         self.position_embedding = torch.nn.Embedding(num_embeddings=self.num_patches[1],
                                                      embedding_dim = self.projection_dim,
                                                      )
-        if self.upsampling_type=='conv':
-            self.sequence = torch.nn.Conv2d(self.num_channels*self.num_patches[0], self.num_channels*self.num_patches[1], kernel_size = self.kernel_size, stride = self.kernel_size),
-            self.resnet = DoubleConv(self.num_channels*self.num_patches[1])
-        else:
-            self.sequence = torch.nn.MaxPool2d(self.kernel_size, stride=self.kernel_size)
+        if self.upsampling_type=='hybrid':
+            self.sq_patch = int(np.sqrt(self.num_patches[0]))
+            self.layer = torch.nn.MaxPool2d(kernel_size = self.kernel_size, stride = self.kernel_size)
+            self.seq = DoubleConv(self.projection_dim, self.projection_dim)
+        elif self.upsampling_type=='hybrid_channel':
+            self.sq_patch = int(np.sqrt(self.num_patches[0]))
+            self.layer = torch.nn.MaxPool2d(kernel_size = self.kernel_size, stride = self.kernel_size)
+            self.seq = DoubleConv(self.num_patches[1]*self.num_channels, self.num_patches[1])
 
     def forward(self,
                 encoded_patches:torch.Tensor,
                 ):
-        if self.upsampling_type=='conv':
-            encoded_patches = unflatten(encoded_patches, self.num_channels)
-            encoded_patches = torch.flatten(encoded_patches, start_dim = 1, end_dim = 2)
-            encoded_patches = self.sequence(encoded_patches)
-            encoded_patches = encoded_patches + self.resnet(encoded_patches)
-            encoded_patches = encoded_patches.reshape((-1, self.num_patches[1], self.num_channels, self.ps//2, self.ps//2))
-            encoded_patches = encoded_patches.flatten(-3, -1)
-            encoded_patches = self.proj(encoded_patches) + self.position_embedding(self.positions)
+        if self.upsampling_type=='hybrid':
+            encoded_patches = torch.permute(torch.reshape(encoded_patches, [-1, self.sq_patch, self.sq_patch, self.projection_dim]), [0,3,1,2])
+            encoded_patches = self.layer(encoded_patches)
+            encoded_patches = .5*(encoded_patches + self.seq(encoded_patches))
+            encoded_patches = torch.permute(encoded_patches, [0,2,3,1])
+            encoded_patches = torch.flatten(encoded_patches, start_dim = 1, end_dim = 2) + self.position_embedding(self.positions)
             return encoded_patches
-        elif self.upsampling_type=='max':
-            encoded_patches = encoded_patches.permute((0,2,1)).reshape((-1, self.projection_dim[0], int(np.sqrt(self.num_patches[0])), int(np.sqrt(self.num_patches[0]))))
-            encoded_patches = self.sequence(encoded_patches)
-            encoded_patches = encoded_patches.flatten(-2,-1).permute((0,2,1)) + self.position_embedding(self.positions)
+        elif self.upsampling_type=='hybrid_channel':
+            # Step I: MaxPool
+            encoded_patches = torch.permute(torch.reshape(encoded_patches, [-1, self.sq_patch, self.sq_patch, self.projection_dim]), [0,3,1,2])
+            encoded_patches = torch.flatten(torch.permute(self.layer(encoded_patches), [0,2,3,1]), start_dim = 1, end_dim = 2)
+            # Step II: Conv
+            encoded_patches_conv = torch.reshape(encoded_patches, [-1, self.num_patches[-1], self.num_channels, self.ps, self.ps])
+            encoded_patches_conv = torch.flatten(encoded_patches_conv, start_dim = 1, end_dim = 2)
+            encoded_patches_conv = self.seq(encoded_patches_conv)
+            encoded_patches_conv = torch.reshape(encoded_patches, [-1, self.num_patches[-1], self.num_channels, self.ps, self.ps])
+            encoded_patches_conv = torch.flatten(encoded_patches_conv, start_dim = 2, end_dim = -1)
+            encoded_patches = .5*(encoded_patches + encoded_patches_conv) +  + self.position_embedding(self.positions)
             return encoded_patches
