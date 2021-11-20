@@ -97,44 +97,58 @@ class FeedForward(torch.nn.Module):
 
 
 ## TransformerEncoder
-class TransformerEncoder(torch.nn.Module):
+class TransformerEncoderBlock(torch.nn.Module):
     def __init__(self,
                  img_size:int,
                  patch_size:int,
                  num_channels:int,
+                 depth:int=6,
                  projection_dim:int=None,
                  hidden_dim_factor:float=2.,
-                 num_heads:int=8,
-                 attn_drop:float=.2,
-                 proj_drop:float=.2,
+                 num_heads:int=4,
+                 attn_drop:float=.05,
+                 proj_drop:float=.05,
                  linear_drop:float=.2,
                  ):
         super().__init__()
+        ## Parameters
         self.img_size = img_size
         self.patch_size = patch_size
         self.num_patches = (self.img_size//self.patch_size)**2
         self.num_channels = num_channels
+        self.depth = depth
         self.projection_dim = projection_dim if projection_dim is not None else self.num_channels*self.patch_size**2
         self.hidden_dim_factor = hidden_dim_factor
         self.num_heads = num_heads
         self.attn_drop = attn_drop
         self.proj_drop = proj_drop
         self.linear_drop = linear_drop
-        self.Attn = torch.nn.MultiheadAttention(projection_dim, self.num_heads, self.attn_drop, batch_first = True)
-        self.LN1 = torch.nn.LayerNorm(normalized_shape = (self.num_patches, self.projection_dim),
-                                     )
-        self.LN2 = torch.nn.LayerNorm(normalized_shape = (self.num_patches, self.projection_dim),
-                                     )
-        self.FeedForward = FeedForward(projection_dim = self.projection_dim,
-                                       hidden_dim_factor = self.hidden_dim_factor,
-                                       dropout = self.linear_drop,
-                                       )
+        ## Layers
+        self.Attn = torch.nn.ModuleList()
+        for _ in range(self.depth):
+            self.Attn.append(torch.nn.MultiheadAttention(projection_dim, self.num_heads, self.attn_drop, batch_first = True))
+        self.LN1 = torch.nn.ModuleList()
+        for _ in range(self.depth):
+            self.LN1.append(torch.nn.LayerNorm(normalized_shape = (self.num_patches, self.projection_dim)))
+        self.LN2 = torch.nn.ModuleList()
+        for _ in range(self.depth):
+            self.LN2.append(torch.nn.LayerNorm(normalized_shape = (self.num_patches, self.projection_dim)))
+        self.FeedForward = torch.nn.ModuleList()
+        for __ in range(self.depth):
+            self.FeedForward.append(
+                FeedForward(projection_dim = self.projection_dim,
+                            hidden_dim_factor = self.hidden_dim_factor,
+                            dropout = self.linear_drop,
+                            )
+            )
+
     def forward(self, encoded_patches):
-        encoded_patch_attn, _ = self.Attn(encoded_patches, encoded_patches, encoded_patches)
-        encoded_patches = encoded_patch_attn + encoded_patches
-        encoded_patches = self.LN1(encoded_patches)
-        encoded_patches = self.FeedForward(encoded_patches) + encoded_patches
-        encoded_patches = self.LN2(encoded_patches)
+        for i in range(self.depth):
+            encoded_patch_attn, _ = self.Attn[i](encoded_patches, encoded_patches, encoded_patches)
+            encoded_patches = encoded_patch_attn + encoded_patches
+            encoded_patches = self.LN1[i](encoded_patches)
+            encoded_patches = self.FeedForward[i](encoded_patches) + encoded_patches
+            encoded_patches = self.LN2[i](encoded_patches)
         return encoded_patches
 
 ## Upsampling
