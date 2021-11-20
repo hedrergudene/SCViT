@@ -20,6 +20,7 @@ class HViT(torch.nn.Module):
                  linear_drop:float=.2,
                  upsampling_type:str="hybrid",
                  dtype:torch.dtype=torch.float,
+                 device="cuda:0",
                  verbose:bool=False,
                  ):
         super(HViT, self).__init__()
@@ -37,12 +38,13 @@ class HViT(torch.nn.Module):
         self.linear_drop = linear_drop
         self.upsampling_type = upsampling_type
         self.dtype = dtype
+        self.device = device
         self.verbose = verbose
         ## Parameters computations
         self.num_patches = [(self.img_size//ps)**2 for ps in self.patch_size]
 
         # Layers
-        self.PE = PatchEncoder(self.img_size, self.patch_size[0], self.num_channels, self.projection_dim, self.dtype)
+        self.PE = PatchEncoder(self.img_size, self.patch_size[0], self.num_channels, self.projection_dim, self.dtype, self.device)
         self.Encoders = torch.nn.ModuleList()
         self.Resampling = torch.nn.ModuleList()
         for i in range(len(self.num_patches)):
@@ -69,6 +71,7 @@ class HViT(torch.nn.Module):
                            self.num_channels,
                            self.projection_dim,
                            self.upsampling_type,
+                           self.device,
                        )
                 )
 
