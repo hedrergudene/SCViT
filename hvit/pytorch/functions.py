@@ -51,6 +51,7 @@ class PatchEncoder(torch.nn.Module):
                  num_channels:int,
                  projection_dim:int=768,
                  dtype:torch.dtype=torch.float32,
+                 device="cuda:0",
                  ):
         super(PatchEncoder, self).__init__()
         # Parameters
@@ -63,7 +64,7 @@ class PatchEncoder(torch.nn.Module):
         self.positions = torch.arange(start = 0,
                          end = self.num_patches,
                          step = 1,
-                         )
+                         ).to(device)
 
         # Layers
         self.linear = torch.nn.Linear(self.num_channels*self.patch_size**2, self.projection_dim, dtype=self.dtype) if projection_dim is not None else torch.nn.Identity(dtype=self.dtype)
@@ -159,6 +160,7 @@ class Upsampling(torch.nn.Module):
                  num_channels:int,
                  projection_dim:int=768,
                  upsampling_type:str='hybrid',
+                 device="cuda:0",
                  ):
         super(Upsampling, self).__init__()
         # Validation
@@ -180,7 +182,7 @@ class Upsampling(torch.nn.Module):
         self.positions = torch.arange(start = 0,
                          end = self.num_patches[1],
                          step = 1,
-                         )
+                         ).to(device)
         self.position_embedding = torch.nn.Embedding(num_embeddings=self.num_patches[1],
                                                      embedding_dim = self.projection_dim,
                                                      )
