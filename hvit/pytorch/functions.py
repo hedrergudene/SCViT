@@ -164,7 +164,7 @@ class Upsampling(torch.nn.Module):
                  ):
         super(Upsampling, self).__init__()
         # Validation
-        assert upsampling_type in ['hybrid', 'hybrid_channel'], f"Upsampling type must either be 'hybrid' or 'hybrid_channel'."
+        assert upsampling_type in ["max", 'hybrid', 'hybrid_channel'], f"Upsampling type must either be 'max', 'hybrid' or 'hybrid_channel'."
         assert patch_size[0]<patch_size[1], f"When upsampling, patch_size[0]<patch_size[1]."
         # Parameters
         self.img_size = img_size
@@ -186,6 +186,9 @@ class Upsampling(torch.nn.Module):
         self.position_embedding = torch.nn.Embedding(num_embeddings=self.num_patches[1],
                                                      embedding_dim = self.projection_dim,
                                                      )
+        if self.upsampling_type=='max':
+            self.sq_patch = int(np.sqrt(self.num_patches[0]))
+            self.layer = torch.nn.MaxPool2d(kernel_size = self.kernel_size, stride = self.kernel_size)
         if self.upsampling_type=='hybrid':
             self.sq_patch = int(np.sqrt(self.num_patches[0]))
             self.layer = torch.nn.MaxPool2d(kernel_size = self.kernel_size, stride = self.kernel_size)
@@ -198,7 +201,13 @@ class Upsampling(torch.nn.Module):
     def forward(self,
                 encoded_patches:torch.Tensor,
                 ):
-        if self.upsampling_type=='hybrid':
+        if self.upsampling_type=='max':
+            encoded_patches = torch.permute(torch.reshape(encoded_patches, [-1, self.sq_patch, self.sq_patch, self.projection_dim]), [0,3,1,2])
+            encoded_patches = self.layer(encoded_patches)
+            encoded_patches = torch.permute(encoded_patches, [0,2,3,1])
+            encoded_patches = torch.flatten(encoded_patches, start_dim = 1, end_dim = 2) + self.position_embedding(self.positions)
+            return encoded_patches
+        elif self.upsampling_type=='hybrid':
             encoded_patches = torch.permute(torch.reshape(encoded_patches, [-1, self.sq_patch, self.sq_patch, self.projection_dim]), [0,3,1,2])
             encoded_patches = self.layer(encoded_patches)
             encoded_patches = .5*(encoded_patches + self.seq(encoded_patches))
