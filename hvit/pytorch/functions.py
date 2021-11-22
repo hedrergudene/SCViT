@@ -29,13 +29,13 @@ def unflatten(flattened, num_channels):
 class DoubleConv(torch.nn.Module):
     """(convolution => [BN] => ReLU) * 2"""
 
-    def __init__(self, num_channels:int, groups:int):
+    def __init__(self, num_channels:int, kernel_size:int, groups:int):
         super(DoubleConv, self).__init__()
         self.double_conv = torch.nn.Sequential(
-            torch.nn.Conv2d(num_channels, num_channels, kernel_size=3, padding='same', groups = groups),
+            torch.nn.Conv2d(num_channels, num_channels, kernel_size=kernel_size, padding='same', groups = groups),
             torch.nn.BatchNorm2d(num_channels),
             torch.nn.GELU(),
-            torch.nn.Conv2d(num_channels, num_channels, kernel_size=3, padding='same', groups = groups),
+            torch.nn.Conv2d(num_channels, num_channels, kernel_size=kernel_size, padding='same', groups = groups),
             torch.nn.BatchNorm2d(num_channels),
             torch.nn.GELU(),
         )
@@ -159,6 +159,7 @@ class Upsampling(torch.nn.Module):
                  patch_size:List[int],
                  num_channels:int,
                  projection_dim:int=768,
+                 kernel_conv:int=3,
                  upsampling_type:str='hybrid',
                  device="cuda:0",
                  ):
@@ -173,6 +174,7 @@ class Upsampling(torch.nn.Module):
         self.num_patches = [(self.img_size//patch)**2 for patch in self.patch_size]
         self.num_channels = num_channels
         self.projection_dim = projection_dim
+        self.kernel_conv = kernel_conv
         self.ratio = (max(self.patch_size)//min(self.patch_size))**2
         self.kernel_size = int(np.sqrt(self.ratio))
         self.final_proj_dim = self.projection_dim//self.ratio
@@ -192,11 +194,11 @@ class Upsampling(torch.nn.Module):
         if self.upsampling_type=='hybrid':
             self.sq_patch = int(np.sqrt(self.num_patches[0]))
             self.layer = torch.nn.MaxPool2d(kernel_size = self.kernel_size, stride = self.kernel_size)
-            self.seq = DoubleConv(self.projection_dim, self.projection_dim)
+            self.seq = DoubleConv(self.projection_dim, self.kernel_conv, self.projection_dim)
         elif self.upsampling_type=='hybrid_channel':
             self.sq_patch = int(np.sqrt(self.num_patches[0]))
             self.layer = torch.nn.MaxPool2d(kernel_size = self.kernel_size, stride = self.kernel_size)
-            self.seq = DoubleConv(self.num_patches[1]*self.num_channels, self.num_patches[1])
+            self.seq = DoubleConv(self.num_patches[1]*self.num_channels, self.kernel_conv, self.num_patches[1])
 
     def forward(self,
                 encoded_patches:torch.Tensor,
