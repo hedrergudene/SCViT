@@ -15,6 +15,7 @@ class HViT(torch.nn.Module):
                  mlp_head_units:List[int]=[128],
                  num_classes:int=100,
                  hidden_dim_factor:float=2.,
+                 kernel_conv:int=3,
                  attn_drop:float=.05,
                  proj_drop:float=.05,
                  linear_drop:float=.2,
@@ -33,6 +34,7 @@ class HViT(torch.nn.Module):
         self.num_heads = num_heads
         self.mlp_head_units = [self.projection_dim] + mlp_head_units + [num_classes]
         self.hidden_dim_factor = hidden_dim_factor
+        self.kernel_conv = kernel_conv
         self.attn_drop = attn_drop
         self.proj_drop = proj_drop
         self.linear_drop = linear_drop
@@ -70,6 +72,7 @@ class HViT(torch.nn.Module):
                            self.patch_size[i:i+2],
                            self.num_channels,
                            self.projection_dim,
+                           self.kernel_conv,
                            self.upsampling_type,
                            self.device,
                        )
