@@ -106,15 +106,13 @@ class ReAttention(torch.nn.Module):
         super().__init__()
         self.num_heads = num_heads
         head_dim = dim // num_heads
-        self.apply_transform = apply_transform
         
         # NOTE scale factor was wrong in my original version, can set manually to be compat with prev weights
         self.scale = qk_scale or head_dim ** -0.5
-        if apply_transform:
-            self.reatten_matrix = torch.nn.Conv2d(self.num_heads,self.num_heads, 1, 1)
-            self.var_norm = torch.nn.BatchNorm2d(self.num_heads)
-            self.qkv = torch.nn.Linear(dim, dim * expansion_ratio, bias=qkv_bias)
-            self.reatten_scale = self.scale if transform_scale else 1.0
+        self.reatten_matrix = torch.nn.Conv2d(self.num_heads,self.num_heads, 1, 1)
+        self.var_norm = torch.nn.BatchNorm2d(self.num_heads)
+        self.qkv = torch.nn.Linear(dim, dim * expansion_ratio, bias=qkv_bias)
+        self.reatten_scale = self.scale if transform_scale else 1.0
         
         self.attn_drop = torch.nn.Dropout(attn_drop)
         self.proj = torch.nn.Linear(dim, dim)
@@ -128,8 +126,7 @@ class ReAttention(torch.nn.Module):
         attn = (q @ k.transpose(-2, -1)) * self.scale
         attn = attn.softmax(dim=-1)
         attn = self.attn_drop(attn)
-        if self.apply_transform:
-            attn = self.var_norm(self.reatten_matrix(attn)) * self.reatten_scale
+        attn = self.var_norm(self.reatten_matrix(attn)) * self.reatten_scale
         attn_next = attn
         x = (attn @ v).transpose(1, 2).reshape(B, N, C)
         x = self.proj(x)
