@@ -111,14 +111,14 @@ class ReAttention(nn.Module):
         # NOTE scale factor was wrong in my original version, can set manually to be compat with prev weights
         self.scale = qk_scale or head_dim ** -0.5
         if apply_transform:
-            self.reatten_matrix = nn.Conv2d(self.num_heads,self.num_heads, 1, 1)
-            self.var_norm = nn.BatchNorm2d(self.num_heads)
-            self.qkv = nn.Linear(dim, dim * expansion_ratio, bias=qkv_bias)
+            self.reatten_matrix = torch.nn.Conv2d(self.num_heads,self.num_heads, 1, 1)
+            self.var_norm = torch.nn.BatchNorm2d(self.num_heads)
+            self.qkv = torch.nn.Linear(dim, dim * expansion_ratio, bias=qkv_bias)
             self.reatten_scale = self.scale if transform_scale else 1.0
         
-        self.attn_drop = nn.Dropout(attn_drop)
-        self.proj = nn.Linear(dim, dim)
-        self.proj_drop = nn.Dropout(proj_drop)
+        self.attn_drop = torch.nn.Dropout(attn_drop)
+        self.proj = torch.nn.Linear(dim, dim)
+        self.proj_drop = torch.nn.Dropout(proj_drop)
           
     def forward(self, q,k,v):
         B, N, C = q.shape
