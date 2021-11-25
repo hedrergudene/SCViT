@@ -20,6 +20,7 @@ class HViT(torch.nn.Module):
                  proj_drop:float=.05,
                  linear_drop:float=.2,
                  upsampling_type:str="hybrid",
+                 original_attn:bool=True,
                  dtype:torch.dtype=torch.float,
                  device="cuda:0",
                  verbose:bool=False,
@@ -39,6 +40,7 @@ class HViT(torch.nn.Module):
         self.proj_drop = proj_drop
         self.linear_drop = linear_drop
         self.upsampling_type = upsampling_type
+        self.original_attn = original_attn
         self.dtype = dtype
         self.device = device
         self.verbose = verbose
@@ -62,6 +64,7 @@ class HViT(torch.nn.Module):
                                         self.attn_drop,
                                         self.proj_drop,
                                         self.linear_drop,
+                                        self.original_attn,
                                         )
             )
             # Resampling
