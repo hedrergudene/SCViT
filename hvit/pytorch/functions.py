@@ -102,31 +102,37 @@ class ReAttention(torch.nn.Module):
     It is observed that similarity along same batch of data is extremely large. 
     Thus can reduce the bs dimension when calculating the attention map.
     """
-    def __init__(self, dim, num_heads=8, qkv_bias=True, qk_scale=None, attn_drop=0., proj_drop=0.,expansion_ratio = 3, transform_scale=False):
+    def __init__(self, dim, num_heads=8, qkv_bias=True, qk_scale=None, attn_drop=0., proj_drop=0., expansion_ratio = 3, apply_transform=True, transform_scale=False):
         super().__init__()
         self.num_heads = num_heads
         head_dim = dim // num_heads
+        self.apply_transform = apply_transform
         
         # NOTE scale factor was wrong in my original version, can set manually to be compat with prev weights
         self.scale = qk_scale or head_dim ** -0.5
-        self.reatten_matrix = torch.nn.Conv2d(self.num_heads,self.num_heads, 1, 1)
-        self.var_norm = torch.nn.BatchNorm2d(self.num_heads)
-        self.qkv = torch.nn.Linear(dim, dim * expansion_ratio, bias=qkv_bias)
-        self.reatten_scale = self.scale if transform_scale else 1.0
+        if apply_transform:
+            self.reatten_matrix = torch.nn.Conv2d(self.num_heads,self.num_heads, 1, 1)
+            self.var_norm = torch.nn.BatchNorm2d(self.num_heads)
+            self.qkv = torch.nn.Linear(dim, dim * expansion_ratio, bias=qkv_bias)
+            self.reatten_scale = self.scale if transform_scale else 1.0
+        else:
+            self.qkv = torch.nn.Linear(dim, dim * expansion_ratio, bias=qkv_bias)
         
         self.attn_drop = torch.nn.Dropout(attn_drop)
         self.proj = torch.nn.Linear(dim, dim)
         self.proj_drop = torch.nn.Dropout(proj_drop)
           
-    def forward(self, q,k,v):
-        B, N, C = q.shape
-        q = q.reshape(B, N, self.num_heads, C // self.num_heads).permute(0, 2, 1, 3)
-        k = k.reshape(B, N, self.num_heads, C // self.num_heads).permute(0, 2, 1, 3)
-        v = v.reshape(B, N, self.num_heads, C // self.num_heads).permute(0, 2, 1, 3)
+    def forward(self, x, atten=None):
+        B, N, C = x.shape
+        # x = self.fc(x)
+        qkv = self.qkv(x).reshape(B, N, 3, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
+        q, k, v = qkv[0], qkv[1], qkv[2]   # make torchscript happy (cannot use tensor as tuple)
+
         attn = (q @ k.transpose(-2, -1)) * self.scale
         attn = attn.softmax(dim=-1)
         attn = self.attn_drop(attn)
-        attn = self.var_norm(self.reatten_matrix(attn)) * self.reatten_scale
+        if self.apply_transform:
+            attn = self.var_norm(self.reatten_matrix(attn)) * self.reatten_scale
         attn_next = attn
         x = (attn @ v).transpose(1, 2).reshape(B, N, C)
         x = self.proj(x)
@@ -161,10 +167,11 @@ class TransformerEncoderBlock(torch.nn.Module):
         self.attn_drop = attn_drop
         self.proj_drop = proj_drop
         self.linear_drop = linear_drop
+        self.original_attn = original_attn
         ## Layers
         self.Attn = torch.nn.ModuleList()
         for _ in range(self.depth):
-                    if original_attn:
+                    if self.original_attn:
                               self.Attn.append(torch.nn.MultiheadAttention(self.projection_dim, self.num_heads, self.attn_drop, batch_first = True))
                     else:
                               self.Attn.append(ReAttention(dim = self.projection_dim, num_heads = self.num_heads, attn_drop=self.attn_drop, proj_drop=self.proj_drop))
@@ -185,7 +192,10 @@ class TransformerEncoderBlock(torch.nn.Module):
 
     def forward(self, encoded_patches):
         for i in range(self.depth):
-            encoded_patch_attn, _ = self.Attn[i](encoded_patches, encoded_patches, encoded_patches)
+            if self.original_attn:
+                    encoded_patch_attn, _ = self.Attn[i](encoded_patches, encoded_patches, encoded_patches)
+            else:
+                    encoded_patch_attn, _ = self.Attn[i](encoded_patches)
             encoded_patches = encoded_patch_attn + encoded_patches
             encoded_patches = self.LN1[i](encoded_patches)
             encoded_patches = self.FeedForward[i](encoded_patches) + encoded_patches
