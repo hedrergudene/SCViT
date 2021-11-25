@@ -96,6 +96,42 @@ class FeedForward(torch.nn.Module):
     def forward(self, x):
         return self.net(x)
 
+## ReAttn
+class ReAttention(nn.Module):
+    """
+    It is observed that similarity along same batch of data is extremely large. 
+    Thus can reduce the bs dimension when calculating the attention map.
+    """
+    def __init__(self, dim, num_heads=8, qkv_bias=True, qk_scale=None, attn_drop=0., proj_drop=0.,expansion_ratio = 3, transform_scale=False):
+        super().__init__()
+        self.num_heads = num_heads
+        head_dim = dim // num_heads
+        self.apply_transform = apply_transform
+        
+        # NOTE scale factor was wrong in my original version, can set manually to be compat with prev weights
+        self.scale = qk_scale or head_dim ** -0.5
+        if apply_transform:
+            self.reatten_matrix = nn.Conv2d(self.num_heads,self.num_heads, 1, 1)
+            self.var_norm = nn.BatchNorm2d(self.num_heads)
+            self.qkv = nn.Linear(dim, dim * expansion_ratio, bias=qkv_bias)
+            self.reatten_scale = self.scale if transform_scale else 1.0
+        
+        self.attn_drop = nn.Dropout(attn_drop)
+        self.proj = nn.Linear(dim, dim)
+        self.proj_drop = nn.Dropout(proj_drop)
+          
+    def forward(self, q,k,v, atten=None):
+        B, N, C = q.shape
+        attn = (q @ k.transpose(-2, -1)) * self.scale
+        attn = attn.softmax(dim=-1)
+        attn = self.attn_drop(attn)
+        if self.apply_transform:
+            attn = self.var_norm(self.reatten_matrix(attn)) * self.reatten_scale
+        attn_next = attn
+        x = (attn @ v).transpose(1, 2).reshape(B, N, C)
+        x = self.proj(x)
+        x = self.proj_drop(x)
+        return x, attn_next
 
 ## TransformerEncoder
 class TransformerEncoderBlock(torch.nn.Module):
@@ -110,6 +146,7 @@ class TransformerEncoderBlock(torch.nn.Module):
                  attn_drop:float=.05,
                  proj_drop:float=.05,
                  linear_drop:float=.2,
+                 original_attn:bool=True,
                  ):
         super().__init__()
         ## Parameters
@@ -127,7 +164,10 @@ class TransformerEncoderBlock(torch.nn.Module):
         ## Layers
         self.Attn = torch.nn.ModuleList()
         for _ in range(self.depth):
-            self.Attn.append(torch.nn.MultiheadAttention(projection_dim, self.num_heads, self.attn_drop, batch_first = True))
+                    if original_attn:
+                              self.Attn.append(torch.nn.MultiheadAttention(self.projection_dim, self.num_heads, self.attn_drop, batch_first = True))
+                    else:
+                              self.Attn.append(ReAttention(dim = self.projection_dim, num_heads = self.num_heads, attn_drop=self.attn_drop, proj_drop=self.proj_drop))
         self.LN1 = torch.nn.ModuleList()
         for _ in range(self.depth):
             self.LN1.append(torch.nn.LayerNorm(normalized_shape = (self.num_patches, self.projection_dim)))
