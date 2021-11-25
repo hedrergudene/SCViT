@@ -97,7 +97,7 @@ class FeedForward(torch.nn.Module):
         return self.net(x)
 
 ## ReAttn
-class ReAttention(nn.Module):
+class ReAttention(torch.nn.Module):
     """
     It is observed that similarity along same batch of data is extremely large. 
     Thus can reduce the bs dimension when calculating the attention map.
