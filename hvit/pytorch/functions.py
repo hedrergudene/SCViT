@@ -120,8 +120,11 @@ class ReAttention(nn.Module):
         self.proj = nn.Linear(dim, dim)
         self.proj_drop = nn.Dropout(proj_drop)
           
-    def forward(self, q,k,v, atten=None):
+    def forward(self, q,k,v):
         B, N, C = q.shape
+        q = q.reshape(B, N, self.num_heads, C // self.num_heads).permute(0, 2, 1, 3)
+        k = k.reshape(B, N, self.num_heads, C // self.num_heads).permute(0, 2, 1, 3)
+        v = v.reshape(B, N, self.num_heads, C // self.num_heads).permute(0, 2, 1, 3)
         attn = (q @ k.transpose(-2, -1)) * self.scale
         attn = attn.softmax(dim=-1)
         attn = self.attn_drop(attn)
