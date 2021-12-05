@@ -208,7 +208,6 @@ class HViT_hybrid(tf.keras.layers.Layer):
                  num_channels:int=3,
                  num_heads:int=4,
                  transformer_layers:List[int]=[6,6,6,6],
-                 num_classes:int=100,
                  hidden_unit_factor:float=2.,
                  drop_attn:float=.05,
                  drop_proj:float=.05,
@@ -227,7 +226,6 @@ class HViT_hybrid(tf.keras.layers.Layer):
         self.num_channels = num_channels
         self.num_heads = num_heads
         self.transformer_layers = transformer_layers
-        self.num_classes = num_classes
         self.drop_attn = drop_attn
         self.drop_proj = drop_proj
         self.drop_linear = drop_linear
