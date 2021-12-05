@@ -208,7 +208,6 @@ class HViT_hybrid(tf.keras.layers.Layer):
                  num_channels:int=3,
                  num_heads:int=4,
                  transformer_layers:List[int]=[6,6,6,6],
-                 mlp_head_units:List[int]=[128],
                  num_classes:int=100,
                  hidden_unit_factor:float=2.,
                  drop_attn:float=.05,
@@ -216,7 +215,6 @@ class HViT_hybrid(tf.keras.layers.Layer):
                  drop_linear:float=.25,
                  original_attn:bool=True,
                  add_position:bool=True,
-                 bias_initializer=None,
                  ):
         super(HViT_hybrid, self).__init__()
         #Validations
@@ -229,7 +227,6 @@ class HViT_hybrid(tf.keras.layers.Layer):
         self.num_channels = num_channels
         self.num_heads = num_heads
         self.transformer_layers = transformer_layers
-        self.mlp_head_units = mlp_head_units
         self.num_classes = num_classes
         self.drop_attn = drop_attn
         self.drop_proj = drop_proj
@@ -240,7 +237,6 @@ class HViT_hybrid(tf.keras.layers.Layer):
         self.num_patches = [(self.img_size//patch)**2 for patch in self.patch_size]
         self.projection_dim = [projection_dim if projection_dim is not None else self.num_channels*patch**2 for patch in self.patch_size]
         self.hidden_units = [int(hidden_unit_factor*proj) for proj in self.projection_dim]
-        self.bias_initializer = bias_initializer if bias_initializer is not None else tf.keras.initializers.Constant([1]*self.num_classes)
         # Layers
         ##Positional Encoding
         self.PE = PatchEncoder(self.img_size, self.patch_size[0], self.num_channels, self.projection_dim[0])
@@ -284,11 +280,6 @@ class HViT_hybrid(tf.keras.layers.Layer):
         self.MLP = tf.keras.Sequential([tf.keras.layers.LayerNormalization(epsilon=1e-6),
                                             tf.keras.layers.GlobalAveragePooling1D(),
                                             ])
-
-        for i in self.mlp_head_units:
-            self.MLP.add(tf.keras.layers.Dense(i))
-            self.MLP.add(tf.keras.layers.Dropout(self.drop_linear))
-        self.MLP.add(tf.keras.layers.Dense(self.num_classes, bias_initializer = self.bias_initializer))
 
     
     def call(self, X:tf.Tensor):
