@@ -1,1 +1,1 @@
-# HViT for image clasification
+# SCViT for image clasification
